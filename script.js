@@ -1,6 +1,17 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
 
+// ======================================================
+// SERVIDOR
+// No computador: localhost
+// No Render: usa automaticamente o endereço do site
+// ======================================================
+
+const API_BASE =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1"
+        ? "http://localhost:3000"
+        : "";
 
 // ======================================================
 // ELEMENTOS
@@ -8,6 +19,7 @@ import { fetchFile, toBlobURL } from "@ffmpeg/util";
 
 const videoInput = document.getElementById("videoInput");
 const selectButton = document.getElementById("selectButton");
+const videoPreview = document.getElementById("videoPreview");
 
 const videoLink = document.getElementById("videoLink");
 const linkButton = document.getElementById("linkButton");
@@ -17,8 +29,6 @@ const selectedFileName = document.getElementById("selectedFileName");
 const selectedFileSize = document.getElementById("selectedFileSize");
 
 const previewArea = document.getElementById("previewArea");
-const videoPreview = document.getElementById("videoPreview");
-
 const manualArea = document.getElementById("manualArea");
 
 const startTime = document.getElementById("startTime");
@@ -28,709 +38,521 @@ const markStartButton = document.getElementById("markStartButton");
 const markEndButton = document.getElementById("markEndButton");
 const addCutButton = document.getElementById("addCutButton");
 
-const cutsList = document.getElementById("cutsList");
+const pendingCuts =
+    document.getElementById("pendingCuts") ||
+    document.getElementById("cutsList");
 
 const generateButton = document.getElementById("generateButton");
 
 const processingArea = document.getElementById("processingArea");
+const processingTitle = document.getElementById("processingTitle");
+const processingText = document.getElementById("processingText");
+const progressBar = document.getElementById("progressBar");
 
 const resultsArea = document.getElementById("resultsArea");
+const resultsCount = document.getElementById("resultsCount");
 const clipsGrid = document.getElementById("clipsGrid");
 
-
 // ======================================================
-// VARIÁVEIS
+// ESTADO
 // ======================================================
 
 let selectedFile = null;
 let videoURL = null;
-
-let ffmpegLoaded = false;
-
 let cortes = [];
 let clipURLs = [];
-
-let youtubeVideoId = null;
+let ffmpegLoaded = false;
 
 const ffmpeg = new FFmpeg();
 
-
-// ======================================================
-// SELECIONAR VÍDEO
-// ======================================================
-
-selectButton.addEventListener("click", () => {
-
-    videoInput.click();
-
+ffmpeg.on("log", ({ message }) => {
+    console.log("FFMPEG:", message);
 });
 
+// ======================================================
+// AUXILIARES
+// ======================================================
 
-videoInput.addEventListener("change", () => {
+function mostrar(elemento) {
+    elemento?.classList.remove("hidden");
+}
 
-    const file = videoInput.files[0];
+function esconder(elemento) {
+    elemento?.classList.add("hidden");
+}
 
-    if (!file) {
-        return;
+function atualizarProgresso(valor) {
+    if (progressBar) {
+        progressBar.style.width = `${valor}%`;
+    }
+}
+
+function atualizarProcessamento(titulo, texto = "") {
+    if (processingTitle) {
+        processingTitle.innerText = titulo;
     }
 
-    prepararVideo(file);
+    if (processingText) {
+        processingText.innerText = texto;
+    }
+}
 
-});
+function formatarTempo(segundos) {
+    segundos = Math.max(0, Number(segundos) || 0);
 
+    const minutos = Math.floor(segundos / 60);
+    const resto = Math.floor(segundos % 60);
+
+    return (
+        String(minutos).padStart(2, "0") +
+        ":" +
+        String(resto).padStart(2, "0")
+    );
+}
+
+function formatarDuracao(segundos) {
+    segundos = Math.max(0, Number(segundos) || 0);
+
+    if (segundos < 60) {
+        return `${Math.round(segundos)}s`;
+    }
+
+    const minutos = Math.floor(segundos / 60);
+    const resto = Math.round(segundos % 60);
+
+    return `${minutos}m ${resto}s`;
+}
+
+function esperar(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ======================================================
+// LIMPAR RESULTADOS
+// ======================================================
+
+function limparResultados() {
+    clipURLs.forEach((url) => {
+        URL.revokeObjectURL(url);
+    });
+
+    clipURLs = [];
+
+    if (clipsGrid) {
+        clipsGrid.innerHTML = "";
+    }
+
+    esconder(resultsArea);
+}
 
 // ======================================================
 // PREPARAR VÍDEO
 // ======================================================
 
 function prepararVideo(file) {
-
     selectedFile = file;
-
-    youtubeVideoId = null;
-
     cortes = [];
 
     limparResultados();
 
-    mostrarCortesPendentes();
-
-
     if (videoURL) {
-
         URL.revokeObjectURL(videoURL);
-
     }
-
 
     videoURL = URL.createObjectURL(file);
 
+    if (selectedFileName) {
+        selectedFileName.innerText = file.name;
+    }
 
-    selectedFileBox.classList.remove("hidden");
+    if (selectedFileSize) {
+        const mb = file.size / 1024 / 1024;
+        selectedFileSize.innerText = `${mb.toFixed(1)} MB`;
+    }
 
-    selectedFileName.innerText = file.name;
+    mostrar(selectedFileBox);
+    mostrar(previewArea);
+    mostrar(manualArea);
 
-    selectedFileSize.innerText =
-        formatarTamanho(file.size);
+    if (videoPreview) {
+        videoPreview.src = videoURL;
+        videoPreview.load();
 
+        videoPreview.onloadedmetadata = () => {
+            const duracao = videoPreview.duration;
 
-    previewArea.classList.remove("hidden");
+            if (startTime) {
+                startTime.value = 0;
+            }
 
-    manualArea.classList.remove("hidden");
+            if (endTime) {
+                endTime.value = Math.min(30, duracao).toFixed(1);
+            }
 
+            if (generateButton) {
+                generateButton.disabled = false;
+            }
+        };
+    }
 
-    videoPreview.src = videoURL;
-
-    videoPreview.load();
-
-
-    generateButton.disabled = true;
-
-
-    videoPreview.onloadedmetadata = () => {
-
-        startTime.value = 0;
-
-        endTime.value = Math.min(
-            30,
-            Math.floor(videoPreview.duration)
-        );
-
-        generateButton.disabled = false;
-
-    };
-
+    mostrarCortesPendentes();
 }
 
+// ======================================================
+// ESCOLHER ARQUIVO
+// ======================================================
+
+selectButton?.addEventListener("click", () => {
+    videoInput?.click();
+});
+
+videoInput?.addEventListener("change", () => {
+    const file = videoInput.files?.[0];
+
+    if (!file) {
+        return;
+    }
+
+    prepararVideo(file);
+});
 
 // ======================================================
 // LINK
 // ======================================================
 
-linkButton.addEventListener("click", async () => {
-
-    const link = videoLink.value.trim();
-
+linkButton?.addEventListener("click", async () => {
+    const link = videoLink?.value.trim();
 
     if (!link) {
-
         alert("Cole um link primeiro.");
-
         return;
-
     }
 
-
     linkButton.disabled = true;
-
-    linkButton.innerText = "Verificando...";
-
+    linkButton.innerText = "Carregando...";
 
     try {
-
-        const resposta = await fetch(
-            "http://localhost:3000/video-link",
-            {
-                method: "POST",
-
-                headers: {
-                    "Content-Type": "application/json"
-                },
-
-                body: JSON.stringify({
-                    url: link
-                })
-            }
-        );
-
+        const resposta = await fetch(`${API_BASE}/video-link`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                url: link
+            })
+        });
 
         const contentType =
             resposta.headers.get("content-type") || "";
 
+        // YouTube ou resposta JSON
+        if (contentType.includes("application/json")) {
+            const dados = await resposta.json();
 
-        // ==================================================
-        // RESPOSTA JSON
-        // ==================================================
-
-        if (
-            contentType.includes("application/json")
-        ) {
-
-            const dados =
-                await resposta.json();
-
-
-            // YOUTUBE
-            if (dados.tipo === "youtube") {
-
-                youtubeVideoId =
-                    dados.videoId;
-
-
-                selectedFile = null;
-
-
-                selectedFileBox.classList.remove(
-                    "hidden"
+            if (!resposta.ok) {
+                throw new Error(
+                    dados.erro ||
+                    dados.error ||
+                    "Não foi possível processar o link."
                 );
-
-
-                selectedFileName.innerText =
-                    "YouTube detectado ✓";
-
-
-                selectedFileSize.innerText =
-                    "ID do vídeo: " +
-                    youtubeVideoId;
-
-
-                previewArea.classList.add(
-                    "hidden"
-                );
-
-
-                manualArea.classList.add(
-                    "hidden"
-                );
-
-
-                generateButton.disabled = true;
-
-
-                alert(
-                    "YouTube detectado com sucesso!\n\n" +
-                    "ID do vídeo: " +
-                    youtubeVideoId
-                );
-
-
-                return;
-
             }
 
+            if (
+                dados.youtube ||
+                dados.youtubeVideoId ||
+                dados.videoId
+            ) {
+                const id =
+                    dados.youtubeVideoId ||
+                    dados.videoId ||
+                    "";
+
+                alert(
+                    "YouTube detectado com sucesso!" +
+                    (id ? `\n\nID do vídeo: ${id}` : "") +
+                    "\n\nO Clip AI reconheceu o vídeo corretamente."
+                );
+
+                return;
+            }
 
             throw new Error(
-                dados.erro ||
-                "Erro ao processar o link."
+                dados.mensagem ||
+                "O link foi reconhecido, mas não retornou um vídeo."
             );
-
         }
 
-
-        // ==================================================
-        // VÍDEO DIRETO
-        // ==================================================
-
         if (!resposta.ok) {
-
             throw new Error(
                 "Não foi possível carregar esse vídeo."
             );
-
         }
 
+        const blob = await resposta.blob();
 
-        const blob =
-            await resposta.blob();
-
+        if (!blob.type.startsWith("video/")) {
+            throw new Error(
+                "O link não retornou um arquivo de vídeo."
+            );
+        }
 
         let extensao = "mp4";
 
-
-        if (
-            blob.type.includes("webm")
-        ) {
-
+        if (blob.type.includes("webm")) {
             extensao = "webm";
-
         }
 
-
-        if (
-            blob.type.includes("quicktime")
-        ) {
-
+        if (blob.type.includes("quicktime")) {
             extensao = "mov";
-
         }
 
-
-        const arquivo =
-            new File(
-                [blob],
-                `video-link.${extensao}`,
-                {
-                    type: blob.type
-                }
-            );
-
-
-        prepararVideo(arquivo);
-
-
-    } catch (erro) {
-
-        console.error(erro);
-
-
-        alert(
-            "Erro ao processar o link.\n\n" +
-            (
-                erro.message ||
-                "Erro desconhecido."
-            )
+        const file = new File(
+            [blob],
+            `video-link.${extensao}`,
+            {
+                type: blob.type
+            }
         );
 
+        prepararVideo(file);
+
+        alert("Vídeo carregado pelo link!");
+
+    } catch (erro) {
+        console.error(erro);
+
+        alert(
+            "Não foi possível carregar o vídeo.\n\n" +
+            (erro.message || "Erro desconhecido.")
+        );
 
     } finally {
-
         linkButton.disabled = false;
-
-        linkButton.innerText =
-            "Usar link";
-
+        linkButton.innerText = "Usar link";
     }
-
 });
 
-
 // ======================================================
-// MARCAR INÍCIO
+// CORTE MANUAL
 // ======================================================
 
-markStartButton.addEventListener(
-    "click",
-    () => {
-
-        startTime.value =
-            videoPreview.currentTime.toFixed(1);
-
+markStartButton?.addEventListener("click", () => {
+    if (!selectedFile || !videoPreview) {
+        return;
     }
-);
 
+    startTime.value =
+        videoPreview.currentTime.toFixed(1);
+});
 
-// ======================================================
-// MARCAR FINAL
-// ======================================================
-
-markEndButton.addEventListener(
-    "click",
-    () => {
-
-        endTime.value =
-            videoPreview.currentTime.toFixed(1);
-
+markEndButton?.addEventListener("click", () => {
+    if (!selectedFile || !videoPreview) {
+        return;
     }
-);
 
+    endTime.value =
+        videoPreview.currentTime.toFixed(1);
+});
 
-// ======================================================
-// ADICIONAR CORTE MANUAL
-// ======================================================
-
-addCutButton.addEventListener(
-    "click",
-    () => {
-
-        const inicio =
-            Number(startTime.value);
-
-        const fim =
-            Number(endTime.value);
-
-
-        if (fim <= inicio) {
-
-            alert(
-                "O final precisa ser maior que o início."
-            );
-
-            return;
-
-        }
-
-
-        cortes.push({
-
-            inicio,
-
-            fim,
-
-            duracao:
-                fim - inicio,
-
-            titulo:
-                `Corte manual ${cortes.length + 1}`,
-
-            score:
-                null
-
-        });
-
-
-        mostrarCortesPendentes();
-
+addCutButton?.addEventListener("click", () => {
+    if (!selectedFile) {
+        alert("Selecione um vídeo.");
+        return;
     }
-);
 
+    const start = Number(startTime?.value);
+    const end = Number(endTime?.value);
+
+    if (
+        !Number.isFinite(start) ||
+        !Number.isFinite(end) ||
+        start < 0 ||
+        end <= start
+    ) {
+        alert("Confira o início e o fim do corte.");
+        return;
+    }
+
+    if (
+        Number.isFinite(videoPreview?.duration) &&
+        end > videoPreview.duration
+    ) {
+        alert(
+            "O corte ultrapassa a duração do vídeo."
+        );
+        return;
+    }
+
+    cortes.push({
+        start,
+        end,
+        titulo: `Corte ${cortes.length + 1}`
+    });
+
+    mostrarCortesPendentes();
+});
 
 // ======================================================
 // MOSTRAR CORTES
 // ======================================================
 
 function mostrarCortesPendentes() {
-
-    cutsList.innerHTML = "";
-
-
-    if (cortes.length === 0) {
-
-        cutsList.innerHTML = `
-            <div style="opacity:.7;">
-                A IA ainda não escolheu os cortes.
-            </div>
-        `;
-
+    if (!pendingCuts) {
         return;
-
     }
 
+    pendingCuts.innerHTML = "";
 
-    cortes.forEach(
-        (corte, index) => {
+    cortes.forEach((corte, index) => {
+        const item = document.createElement("div");
+        item.className = "pending-cut";
 
-            const item =
-                document.createElement("div");
+        const texto = document.createElement("span");
 
+        texto.innerText =
+            `${corte.titulo || `Corte ${index + 1}`} • ` +
+            `${formatarTempo(corte.start)} → ` +
+            `${formatarTempo(corte.end)}`;
 
-            item.className =
-                "pending-cut";
+        const remover = document.createElement("button");
 
+        remover.type = "button";
+        remover.innerText = "Remover";
 
-            const score =
-                corte.score !== null &&
-                corte.score !== undefined
+        remover.addEventListener("click", () => {
+            cortes.splice(index, 1);
+            mostrarCortesPendentes();
+        });
 
-                    ? `
-                        <div>
-                            🔥 Score ${corte.score}
-                        </div>
-                      `
+        item.appendChild(texto);
+        item.appendChild(remover);
 
-                    : "";
+        pendingCuts.appendChild(item);
+    });
+}
 
+// ======================================================
+// IA LOCAL - ENCONTRAR MELHORES MOMENTOS
+// ======================================================
 
-            item.innerHTML = `
+async function analisarComIA() {
+    atualizarProcessamento(
+        "Analisando com IA...",
+        "Transcrevendo e procurando os melhores momentos."
+    );
 
-                <div>
+    atualizarProgresso(8);
 
-                    <strong>
-                        ${escaparHTML(
-                            corte.titulo ||
-                            `Clipe ${index + 1}`
-                        )}
-                    </strong>
+    const formData = new FormData();
 
-                    <div>
+    formData.append(
+        "video",
+        selectedFile,
+        selectedFile.name
+    );
 
-                        ${formatarTempo(
-                            corte.inicio
-                        )}
-
-                        →
-
-                        ${formatarTempo(
-                            corte.fim
-                        )}
-
-                    </div>
-
-                    ${score}
-
-                </div>
-
-
-                <button
-                    type="button"
-                    class="remove-cut"
-                    data-index="${index}"
-                >
-                    ×
-                </button>
-
-            `;
-
-
-            cutsList.appendChild(item);
-
+    const resposta = await fetch(
+        `${API_BASE}/analisar-video`,
+        {
+            method: "POST",
+            body: formData
         }
     );
 
-
-    cutsList
-        .querySelectorAll(".remove-cut")
-        .forEach(botao => {
-
-            botao.addEventListener(
-                "click",
-                () => {
-
-                    cortes.splice(
-                        Number(
-                            botao.dataset.index
-                        ),
-                        1
-                    );
-
-                    mostrarCortesPendentes();
-
-                }
-            );
-
-        });
-
-}
-
-
-// ======================================================
-// GERAR COM IA
-// ======================================================
-
-generateButton.addEventListener(
-    "click",
-    async () => {
-
-        if (!selectedFile) {
-
-            alert(
-                "Selecione um vídeo primeiro."
-            );
-
-            return;
-
-        }
-
-
-        try {
-
-            generateButton.disabled = true;
-
-            generateButton.innerText =
-                "🧠 IA analisando...";
-
-
-            mostrarProcessamento(`
-                <strong>
-                    🧠 Clip AI analisando o vídeo
-                </strong>
-
-                <br><br>
-
-                Transcrevendo o conteúdo com IA local...
-
-                <br>
-
-                Procurando os melhores momentos...
-            `);
-
-
-            // ==================================================
-            // ENVIAR PARA O BACKEND
-            // ==================================================
-
-            const formData =
-                new FormData();
-
-
-            formData.append(
-                "video",
-                selectedFile,
-                selectedFile.name
-            );
-
-
-            const resposta =
-                await fetch(
-                    "http://localhost:3000/analisar-video",
-                    {
-                        method: "POST",
-                        body: formData
-                    }
-                );
-
-
-            const dados =
-                await resposta.json();
-
-
-            if (!resposta.ok) {
-
-                throw new Error(
-                    dados.erro ||
-                    "Erro durante análise."
-                );
-
-            }
-
-
-            if (
-                !dados.cortes ||
-                dados.cortes.length === 0
-            ) {
-
-                throw new Error(
-                    "Nenhum corte foi encontrado."
-                );
-
-            }
-
-
-            // ==================================================
-            // RECEBER CORTES
-            // ==================================================
-
-            cortes =
-                dados.cortes.map(
-                    corte => ({
-
-                        inicio:
-                            Number(corte.inicio),
-
-                        fim:
-                            Number(corte.fim),
-
-                        duracao:
-                            Number(corte.duracao),
-
-                        titulo:
-                            corte.titulo,
-
-                        score:
-                            corte.score,
-
-                        motivo:
-                            corte.motivo
-
-                    })
-                );
-
-
-            mostrarCortesPendentes();
-
-
-            mostrarProcessamento(`
-                <strong>
-                    ✂️ ${cortes.length} momentos encontrados!
-                </strong>
-
-                <br><br>
-
-                Criando os clipes em formato vertical 9:16...
-            `);
-
-
-            // ==================================================
-            // GERAR OS VÍDEOS
-            // ==================================================
-
-            await gerarTodosOsClipes();
-
-
-        } catch (erro) {
-
-            console.error(erro);
-
-
-            esconderProcessamento();
-
-
-            alert(
-                "Não foi possível gerar os clipes.\n\n" +
-                (
-                    erro.message ||
-                    "Erro desconhecido."
-                )
-            );
-
-
-        } finally {
-
-            generateButton.disabled = false;
-
-            generateButton.innerText =
-                "✨ Gerar clipes com IA";
-
-        }
-
+    let dados;
+
+    try {
+        dados = await resposta.json();
+    } catch {
+        throw new Error(
+            "O servidor não retornou uma resposta válida."
+        );
     }
-);
 
+    if (!resposta.ok) {
+        throw new Error(
+            dados.erro ||
+            dados.error ||
+            "Erro durante a análise do vídeo."
+        );
+    }
+
+    const cortesRecebidos =
+        dados.cortes ||
+        dados.cuts ||
+        [];
+
+    if (!Array.isArray(cortesRecebidos)) {
+        throw new Error(
+            "A IA não retornou uma lista de cortes."
+        );
+    }
+
+    const novosCortes =
+        cortesRecebidos
+            .map((corte, index) => {
+                const start = Number(
+                    corte.start ??
+                    corte.inicio ??
+                    corte.startTime
+                );
+
+                const end = Number(
+                    corte.end ??
+                    corte.fim ??
+                    corte.endTime
+                );
+
+                return {
+                    start,
+                    end,
+                    titulo:
+                        corte.titulo ||
+                        corte.title ||
+                        `Momento ${index + 1}`,
+                    motivo:
+                        corte.motivo ||
+                        corte.reason ||
+                        ""
+                };
+            })
+            .filter((corte) => {
+                return (
+                    Number.isFinite(corte.start) &&
+                    Number.isFinite(corte.end) &&
+                    corte.end > corte.start
+                );
+            });
+
+    if (novosCortes.length === 0) {
+        throw new Error(
+            "A IA não encontrou cortes válidos neste vídeo."
+        );
+    }
+
+    cortes = novosCortes;
+
+    mostrarCortesPendentes();
+
+    return cortes;
+}
 
 // ======================================================
 // CARREGAR FFMPEG
 // ======================================================
 
 async function carregarFFmpeg() {
-
     if (ffmpegLoaded) {
         return;
     }
 
-
-    mostrarProcessamento(`
-        <strong>
-            ⚙️ Preparando editor de vídeo...
-        </strong>
-
-        <br><br>
-
-        Aguarde alguns segundos.
-    `);
-
+    atualizarProcessamento(
+        "Carregando processador...",
+        "Na primeira vez isso pode levar alguns segundos."
+    );
 
     const baseURL =
         "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm";
-
 
     const coreURL =
         await toBlobURL(
@@ -738,508 +560,293 @@ async function carregarFFmpeg() {
             "text/javascript"
         );
 
-
     const wasmURL =
         await toBlobURL(
             `${baseURL}/ffmpeg-core.wasm`,
             "application/wasm"
         );
 
-
     await ffmpeg.load({
         coreURL,
         wasmURL
     });
 
-
     ffmpegLoaded = true;
-
 }
 
-
 // ======================================================
-// GERAR TODOS OS CLIPES
+// GERAR
 // ======================================================
 
-async function gerarTodosOsClipes() {
+generateButton?.addEventListener("click", async () => {
+    if (!selectedFile) {
+        alert("Selecione um vídeo primeiro.");
+        return;
+    }
 
-    await carregarFFmpeg();
+    generateButton.disabled = true;
 
+    mostrar(processingArea);
+    esconder(resultsArea);
 
     limparResultados();
 
+    atualizarProgresso(3);
 
-    resultsArea.classList.remove(
-        "hidden"
-    );
-
-
-    mostrarProcessamento(`
-        <strong>
-            ⚙️ Preparando vídeo...
-        </strong>
-    `);
-
-
-    await ffmpeg.writeFile(
-        "entrada.mp4",
-        await fetchFile(selectedFile)
-    );
-
-
-    for (
-        let i = 0;
-        i < cortes.length;
-        i++
-    ) {
-
-        const corte =
-            cortes[i];
-
-
-        const numero =
-            i + 1;
-
-
-        mostrarProcessamento(`
-            <strong>
-                ✂️ Criando clipe ${numero} de ${cortes.length}
-            </strong>
-
-            <br><br>
-
-            ${escaparHTML(
-                corte.titulo || ""
-            )}
-
-            <br><br>
-
-            Convertendo para vertical 9:16...
-        `);
-
-
-        const nomeSaida =
-            `clip-${numero}.mp4`;
-
-
-        const duracao =
-            corte.fim -
-            corte.inicio;
-
-
-        // ==================================================
-        // CORTE + CONVERSÃO VERTICAL 9:16
-        //
-        // 720 x 1280
-        //
-        // O vídeo é ampliado e o centro é recortado.
-        // ==================================================
-
-        await ffmpeg.exec([
-
-            "-ss",
-            String(corte.inicio),
-
-            "-i",
-            "entrada.mp4",
-
-            "-t",
-            String(duracao),
-
-            "-vf",
-            "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280",
-
-            "-c:v",
-            "libx264",
-
-            "-preset",
-            "ultrafast",
-
-            "-crf",
-            "26",
-
-            "-c:a",
-            "aac",
-
-            "-b:a",
-            "128k",
-
-            "-movflags",
-            "+faststart",
-
-            nomeSaida
-
-        ]);
-
-
-        // ==================================================
-        // LER O ARQUIVO GERADO
-        // ==================================================
-
-        const dados =
-            await ffmpeg.readFile(
-                nomeSaida
-            );
-
-
-        const blob =
-            new Blob(
-                [dados.buffer],
-                {
-                    type:
-                        "video/mp4"
-                }
-            );
-
-
-        const url =
-            URL.createObjectURL(
-                blob
-            );
-
-
-        clipURLs.push(url);
-
-
-        // ==================================================
-        // CRIAR CARD
-        // ==================================================
-
-        criarCardClipe(
-            corte,
-            url,
-            numero
-        );
-
-
-        // ==================================================
-        // APAGAR TEMPORÁRIO DO FFMPEG
-        // ==================================================
-
-        try {
-
-            await ffmpeg.deleteFile(
-                nomeSaida
-            );
-
-        } catch {
-
-            // Não faz nada
+    try {
+        // Se o usuário não criou cortes manualmente,
+        // a IA escolhe automaticamente.
+        if (cortes.length === 0) {
+            await analisarComIA();
         }
 
+        await carregarFFmpeg();
+
+        atualizarProcessamento(
+            "Preparando vídeo...",
+            "Carregando o vídeo para criar os cortes."
+        );
+
+        atualizarProgresso(18);
+
+        try {
+            await ffmpeg.deleteFile("entrada.mp4");
+        } catch {
+            // arquivo ainda não existe
+        }
+
+        await ffmpeg.writeFile(
+            "entrada.mp4",
+            await fetchFile(selectedFile)
+        );
+
+        if (clipsGrid) {
+            clipsGrid.innerHTML = "";
+        }
+
+        for (
+            let i = 0;
+            i < cortes.length;
+            i++
+        ) {
+            const corte = cortes[i];
+
+            const duracao =
+                corte.end -
+                corte.start;
+
+            atualizarProcessamento(
+                `Criando clipe ${i + 1} de ${cortes.length}`,
+                "Convertendo para vídeo vertical 9:16..."
+            );
+
+            const porcentagem =
+                22 +
+                ((i / cortes.length) * 72);
+
+            atualizarProgresso(porcentagem);
+
+            const nome =
+                `clip-${i + 1}.mp4`;
+
+            try {
+                await ffmpeg.deleteFile(nome);
+            } catch {
+                // ainda não existe
+            }
+
+            await ffmpeg.exec([
+                "-ss",
+                String(corte.start),
+
+                "-i",
+                "entrada.mp4",
+
+                "-t",
+                String(duracao),
+
+                "-vf",
+                "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280",
+
+                "-c:v",
+                "libx264",
+
+                "-preset",
+                "ultrafast",
+
+                "-crf",
+                "26",
+
+                "-c:a",
+                "aac",
+
+                "-b:a",
+                "128k",
+
+                "-movflags",
+                "+faststart",
+
+                nome
+            ]);
+
+            const data =
+                await ffmpeg.readFile(nome);
+
+            const blob =
+                new Blob(
+                    [data.buffer],
+                    {
+                        type: "video/mp4"
+                    }
+                );
+
+            const url =
+                URL.createObjectURL(blob);
+
+            clipURLs.push(url);
+
+            criarCardClip(
+                url,
+                corte,
+                i
+            );
+
+            try {
+                await ffmpeg.deleteFile(nome);
+            } catch {
+                // nada
+            }
+        }
+
+        atualizarProgresso(100);
+
+        atualizarProcessamento(
+            "Tudo pronto!",
+            "Seus clipes foram gerados."
+        );
+
+        await esperar(500);
+
+        esconder(processingArea);
+        mostrar(resultsArea);
+
+        if (resultsCount) {
+            resultsCount.innerText =
+                `${cortes.length} ` +
+                (
+                    cortes.length === 1
+                        ? "clipe gerado."
+                        : "clipes gerados."
+                );
+        }
+
+        resultsArea?.scrollIntoView({
+            behavior: "smooth"
+        });
+
+    } catch (erro) {
+        console.error(erro);
+
+        esconder(processingArea);
+
+        alert(
+            "Erro ao gerar os clipes:\n\n" +
+            (erro.message || "Erro desconhecido.")
+        );
+
+    } finally {
+        generateButton.disabled = false;
+    }
+});
+
+// ======================================================
+// CARD DO CLIPE
+// ======================================================
+
+function criarCardClip(
+    url,
+    corte,
+    index
+) {
+    if (!clipsGrid) {
+        return;
     }
 
-
-    // ==================================================
-    // FINALIZOU
-    // ==================================================
-
-    esconderProcessamento();
-
-
-    resultsArea.scrollIntoView({
-        behavior: "smooth"
-    });
-
-
-    alert(
-        `🎉 Pronto!\n\n${cortes.length} clipes foram criados.`
-    );
-
-}
-
-
-// ======================================================
-// CRIAR CARD DO CLIPE
-// ======================================================
-
-function criarCardClipe(
-    corte,
-    url,
-    numero
-) {
-
     const card =
-        document.createElement("div");
-
+        document.createElement("article");
 
     card.className =
         "clip-card";
 
-
-    const score =
-        corte.score !== null &&
-        corte.score !== undefined
-
-            ? `
-                <div class="clip-score">
-                    🔥 Score ${corte.score}
-                </div>
-              `
-
-            : "";
-
-
-    card.innerHTML = `
-
-        <div class="clip-video-wrapper">
-
-            <video
-                class="clip-video"
-                src="${url}"
-                controls
-                preload="metadata"
-            ></video>
-
-        </div>
-
-
-        <div class="clip-content">
-
-            ${score}
-
-
-            <h3>
-
-                ${escaparHTML(
-                    corte.titulo ||
-                    `Clipe ${numero}`
-                )}
-
-            </h3>
-
-
-            <p>
-
-                ${formatarTempo(
-                    corte.inicio
-                )}
-
-                →
-
-                ${formatarTempo(
-                    corte.fim
-                )}
-
-            </p>
-
-
-            <p>
-
-                Duração:
-
-                ${formatarDuracao(
-                    corte.fim -
-                    corte.inicio
-                )}
-
-            </p>
-
-
-            <a
-                href="${url}"
-                download="clip-ai-${numero}.mp4"
-                class="download-button"
-            >
-                ⬇ Baixar clipe
-            </a>
-
-        </div>
-
-    `;
-
-
-    clipsGrid.appendChild(card);
-
-}
-
-
-// ======================================================
-// PROCESSAMENTO
-// ======================================================
-
-function mostrarProcessamento(texto) {
-
-    processingArea.classList.remove(
-        "hidden"
-    );
-
-
-    processingArea.innerHTML =
-        texto;
-
-}
-
-
-function esconderProcessamento() {
-
-    processingArea.classList.add(
-        "hidden"
-    );
-
-}
-
-
-// ======================================================
-// LIMPAR RESULTADOS
-// ======================================================
-
-function limparResultados() {
-
-    clipURLs.forEach(url => {
-
-        URL.revokeObjectURL(url);
-
-    });
-
-
-    clipURLs = [];
-
-
-    clipsGrid.innerHTML = "";
-
-
-    resultsArea.classList.add(
-        "hidden"
-    );
-
-}
-
-
-// ======================================================
-// FORMATAR TAMANHO
-// ======================================================
-
-function formatarTamanho(bytes) {
-
-    if (
-        bytes <
-        1024 * 1024
-    ) {
-
-        return (
-            (bytes / 1024)
-                .toFixed(1)
-            +
-            " KB"
-        );
-
-    }
-
-
-    return (
-        (
-            bytes /
-            1024 /
-            1024
-        ).toFixed(2)
-        +
-        " MB"
-    );
-
-}
-
-
-// ======================================================
-// FORMATAR TEMPO
-// ======================================================
-
-function formatarTempo(segundos) {
-
-    segundos =
-        Math.max(
-            0,
-            Number(segundos)
-        );
-
-
-    const minutos =
-        Math.floor(
-            segundos / 60
-        );
-
-
-    const resto =
-        Math.floor(
-            segundos % 60
-        );
-
-
-    return (
-        String(minutos)
-            .padStart(2, "0")
-        +
-        ":"
-        +
-        String(resto)
-            .padStart(2, "0")
-    );
-
-}
-
-
-// ======================================================
-// FORMATAR DURAÇÃO
-// ======================================================
-
-function formatarDuracao(segundos) {
-
-    const total =
-        Math.round(segundos);
-
-
-    if (total < 60) {
-
-        return (
-            total +
-            " segundos"
-        );
-
-    }
-
-
-    const minutos =
-        Math.floor(
-            total / 60
-        );
-
-
-    const resto =
-        total % 60;
-
-
-    return (
-        `${minutos} min ${resto}s`
-    );
-
-}
-
-
-// ======================================================
-// EVITAR HTML NO TÍTULO
-// ======================================================
-
-function escaparHTML(texto) {
-
-    const div =
+    const videoWrapper =
         document.createElement("div");
 
+    videoWrapper.className =
+        "clip-video-wrapper";
 
-    div.textContent =
-        texto || "";
+    const video =
+        document.createElement("video");
 
+    video.className =
+        "clip-video";
 
-    return div.innerHTML;
+    video.src = url;
+    video.controls = true;
+    video.preload = "metadata";
+    video.playsInline = true;
 
+    videoWrapper.appendChild(video);
+
+    const content =
+        document.createElement("div");
+
+    content.className =
+        "clip-content";
+
+    const titulo =
+        document.createElement("div");
+
+    titulo.className =
+        "clip-title";
+
+    titulo.innerText =
+        corte.titulo ||
+        `Clipe ${String(index + 1).padStart(2, "0")}`;
+
+    const tempo =
+        document.createElement("div");
+
+    tempo.className =
+        "clip-time";
+
+    tempo.innerText =
+        `${formatarTempo(corte.start)} → ` +
+        `${formatarTempo(corte.end)} • ` +
+        formatarDuracao(
+            corte.end -
+            corte.start
+        );
+
+    const download =
+        document.createElement("a");
+
+    download.className =
+        "download-button";
+
+    download.href = url;
+
+    download.download =
+        `clip-ai-${index + 1}.mp4`;
+
+    download.innerText =
+        "⬇ Baixar clipe";
+
+    content.appendChild(titulo);
+    content.appendChild(tempo);
+    content.appendChild(download);
+
+    card.appendChild(videoWrapper);
+    card.appendChild(content);
+
+    clipsGrid.appendChild(card);
 }
-
-
-// ======================================================
-// INICIALIZAÇÃO
-// ======================================================
-
-generateButton.innerText =
-    "✨ Gerar clipes com IA";
-
-
-mostrarCortesPendentes();
