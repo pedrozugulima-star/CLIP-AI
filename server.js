@@ -1,100 +1,117 @@
-const express = require("express");
-const cors = require("cors");
-const multer = require("multer");
-const fs = require("fs");
-const path = require("path");
-const { spawn } = require("child_process");
+import express from "express";
+import cors from "cors";
+import multer from "multer";
+import fs from "fs";
+import path from "path";
+import { spawn } from "child_process";
+import { fileURLToPath } from "url";
+
+
+/* =========================================
+   CONFIGURAÇÕES
+========================================= */
 
 const app = express();
-const PORT = 3000;
 
-app.use(cors());
-app.use(express.json({ limit: "10mb" }));
+const PORT = process.env.PORT || 3000;
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 
-// ======================================================
-// PASTA DE UPLOAD
-// ======================================================
+/* =========================================
+   PASTAS TEMPORÁRIAS
+========================================= */
 
-const pastaUploads = path.join(__dirname, "uploads");
+const uploadsDir = path.join(__dirname, "uploads");
 
-if (!fs.existsSync(pastaUploads)) {
-    fs.mkdirSync(pastaUploads, { recursive: true });
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, {
+        recursive: true
+    });
 }
 
 
-// ======================================================
-// CONFIGURAÇÃO DO UPLOAD
-// ======================================================
+/* =========================================
+   MIDDLEWARES
+========================================= */
+
+app.use(cors());
+
+app.use(
+    express.json({
+        limit: "20mb"
+    })
+);
+
+
+/* =========================================
+   MULTER
+========================================= */
+
+const storage = multer.diskStorage({
+
+    destination: function (req, file, cb) {
+
+        cb(null, uploadsDir);
+
+    },
+
+    filename: function (req, file, cb) {
+
+        const extensao =
+            path.extname(file.originalname) || ".mp4";
+
+        const nome =
+            `video-${Date.now()}-${Math.round(
+                Math.random() * 1e9
+            )}${extensao}`;
+
+        cb(null, nome);
+
+    }
+
+});
+
 
 const upload = multer({
-    dest: pastaUploads,
+
+    storage,
 
     limits: {
         fileSize: 1024 * 1024 * 1024
     }
+
 });
 
 
-// ======================================================
-// TESTE DO SERVIDOR
-// ======================================================
+/* =========================================
+   YOUTUBE
+========================================= */
 
-app.get("/", (req, res) => {
-    res.send("Clip AI Backend local funcionando!");
-});
-
-
-// ======================================================
-// RECONHECER LINK DO YOUTUBE
-// ======================================================
-
-function obterIdYouTube(link) {
+function obterIdYouTube(url) {
 
     try {
 
-        const url = new URL(link);
-
-        const host = url.hostname
-            .replace("www.", "")
-            .replace("m.", "");
+        const parsed = new URL(url);
 
 
-        if (host === "youtu.be") {
+        if (
+            parsed.hostname.includes("youtube.com")
+        ) {
 
-            return (
-                url.pathname
-                    .split("/")
-                    .filter(Boolean)[0]
-                || null
-            );
+            return parsed.searchParams.get("v");
 
         }
 
 
         if (
-            host === "youtube.com" ||
-            host === "music.youtube.com"
+            parsed.hostname.includes("youtu.be")
         ) {
 
-            if (url.pathname === "/watch") {
-                return url.searchParams.get("v");
-            }
-
-
-            if (url.pathname.startsWith("/shorts/")) {
-                return url.pathname.split("/")[2] || null;
-            }
-
-
-            if (url.pathname.startsWith("/embed/")) {
-                return url.pathname.split("/")[2] || null;
-            }
-
-
-            if (url.pathname.startsWith("/live/")) {
-                return url.pathname.split("/")[2] || null;
-            }
+            return parsed.pathname
+                .replace("/", "")
+                .split("?")[0];
 
         }
 
@@ -110,56 +127,48 @@ function obterIdYouTube(link) {
 }
 
 
-// ======================================================
-// RECEBER LINK
-// ======================================================
+/* =========================================
+   ROTA DE LINK
+========================================= */
 
 app.post("/video-link", async (req, res) => {
 
+    const { url } = req.body;
+
+
+    if (!url) {
+
+        return res.status(400).json({
+            sucesso: false,
+            erro: "Nenhum link informado."
+        });
+
+    }
+
+
+    const videoId = obterIdYouTube(url);
+
+
+    if (videoId) {
+
+        return res.status(422).json({
+
+            sucesso: false,
+
+            tipo: "youtube",
+
+            videoId,
+
+            mensagem:
+                `YouTube detectado com sucesso! ID do vídeo: ${videoId}. ` +
+                "O Clip AI reconheceu o vídeo corretamente."
+
+        });
+
+    }
+
+
     try {
-
-        const { url } = req.body;
-
-
-        if (!url) {
-
-            return res.status(400).json({
-                erro: "Nenhum link foi informado."
-            });
-
-        }
-
-
-        // --------------------------------------------------
-        // YOUTUBE
-        // --------------------------------------------------
-
-        const youtubeId = obterIdYouTube(url);
-
-
-        if (youtubeId) {
-
-            console.log("YouTube detectado:", youtubeId);
-
-
-            return res.status(422).json({
-
-                tipo: "youtube",
-
-                videoId: youtubeId,
-
-                url,
-
-                erro: "YouTube detectado."
-
-            });
-
-        }
-
-
-        // --------------------------------------------------
-        // LINK DIRETO
-        // --------------------------------------------------
 
         const resposta = await fetch(url);
 
@@ -167,23 +176,27 @@ app.post("/video-link", async (req, res) => {
         if (!resposta.ok) {
 
             return res.status(400).json({
-                erro: "Não foi possível acessar esse vídeo."
+                sucesso: false,
+                erro: "Não foi possível carregar esse vídeo."
             });
 
         }
 
 
         const contentType =
-            resposta.headers.get("content-type");
+            resposta.headers.get("content-type") ||
+            "video/mp4";
 
 
         if (
-            !contentType ||
-            !contentType.includes("video")
+            !contentType.includes("video") &&
+            !url.toLowerCase().includes(".mp4")
         ) {
 
             return res.status(400).json({
-                erro: "Esse endereço não parece ser um vídeo direto."
+                sucesso: false,
+                erro:
+                    "Esse endereço não parece ser um link direto de vídeo."
             });
 
         }
@@ -204,20 +217,25 @@ app.post("/video-link", async (req, res) => {
 
 
         res.setHeader(
-            "Content-Disposition",
-            'attachment; filename="video-link.mp4"'
+            "Content-Length",
+            buffer.length
         );
 
 
-        res.send(buffer);
+        return res.send(buffer);
 
     } catch (erro) {
 
-        console.error("Erro no link:", erro);
+        console.error(
+            "Erro ao carregar link:",
+            erro
+        );
 
 
-        res.status(500).json({
-            erro: "Erro ao processar o link."
+        return res.status(500).json({
+            sucesso: false,
+            erro:
+                "O servidor não conseguiu acessar esse link."
         });
 
     }
@@ -225,13 +243,14 @@ app.post("/video-link", async (req, res) => {
 });
 
 
-// ======================================================
-// EXECUTAR WHISPER LOCAL
-// ======================================================
+/* =========================================
+   EXECUTAR WHISPER
+========================================= */
 
 function executarWhisper(caminhoVideo) {
 
     return new Promise((resolve, reject) => {
+
 
         const scriptPython =
             path.join(
@@ -240,215 +259,301 @@ function executarWhisper(caminhoVideo) {
             );
 
 
-        console.log("");
-        console.log("Executando Whisper local...");
+        /*
+            WINDOWS = python
+            RENDER / LINUX = python3
+        */
+
+        const pythonCommand =
+            process.platform === "win32"
+                ? "python"
+                : "python3";
+
+
+        console.log(
+            "Executando Whisper com:",
+            pythonCommand
+        );
 
 
         const processo = spawn(
-            "python",
+
+            pythonCommand,
+
             [
                 scriptPython,
                 caminhoVideo
             ],
+
             {
-                cwd: __dirname
+
+                env: {
+                    ...process.env,
+                    PYTHONIOENCODING: "utf-8"
+                }
+
             }
+
         );
 
 
         let saida = "";
-        let erros = "";
+        let erroSaida = "";
 
 
-        processo.stdout.on("data", dados => {
+        processo.stdout.on(
+            "data",
+            data => {
 
-            saida +=
-                dados.toString("utf8");
+                saida +=
+                    data.toString("utf8");
 
-        });
-
-
-        processo.stderr.on("data", dados => {
-
-            const texto =
-                dados.toString("utf8");
+            }
+        );
 
 
-            erros += texto;
+        processo.stderr.on(
+            "data",
+            data => {
+
+                const texto =
+                    data.toString("utf8");
+
+                erroSaida += texto;
+
+                console.log(
+                    "[Whisper]",
+                    texto.trim()
+                );
+
+            }
+        );
 
 
-            console.log(
-                texto.trim()
-            );
-
-        });
-
-
-        processo.on("error", erro => {
-
-            reject(
-                new Error(
-                    "Não consegui iniciar o Python: " +
-                    erro.message
-                )
-            );
-
-        });
-
-
-        processo.on("close", codigo => {
-
-            if (codigo !== 0) {
+        processo.on(
+            "error",
+            erro => {
 
                 reject(
                     new Error(
-                        erros ||
-                        "Whisper terminou com erro."
+                        `Não foi possível iniciar o Python: ${erro.message}`
                     )
                 );
 
-                return;
-
             }
+        );
 
 
-            try {
-
-                const resultado =
-                    JSON.parse(
-                        saida.trim()
-                    );
+        processo.on(
+            "close",
+            codigo => {
 
 
-                if (!resultado.sucesso) {
+                if (codigo !== 0) {
 
-                    reject(
+                    return reject(
                         new Error(
-                            resultado.erro ||
-                            "Erro na transcrição."
+                            erroSaida ||
+                            `Whisper terminou com código ${codigo}`
                         )
                     );
-
-                    return;
 
                 }
 
 
-                resolve(resultado);
+                try {
 
-            } catch (erro) {
-
-                console.error(
-                    "Resposta do Whisper:",
-                    saida
-                );
+                    const texto =
+                        saida.trim();
 
 
-                reject(
-                    new Error(
-                        "Não consegui interpretar a resposta do Whisper."
-                    )
-                );
+                    /*
+                        Tenta primeiro interpretar
+                        toda a saída como JSON.
+                    */
+
+                    let resultado;
+
+
+                    try {
+
+                        resultado =
+                            JSON.parse(texto);
+
+                    } catch {
+
+
+                        /*
+                            Caso alguma mensagem apareça
+                            antes do JSON, procura o último
+                            bloco JSON válido.
+                        */
+
+                        const inicio =
+                            texto.lastIndexOf(
+                                "\n{"
+                            );
+
+
+                        if (inicio >= 0) {
+
+                            resultado =
+                                JSON.parse(
+                                    texto.slice(
+                                        inicio + 1
+                                    )
+                                );
+
+                        } else {
+
+                            resultado =
+                                JSON.parse(texto);
+
+                        }
+
+                    }
+
+
+                    resolve(resultado);
+
+                } catch (erro) {
+
+                    console.error(
+                        "Saída recebida do Python:"
+                    );
+
+                    console.error(saida);
+
+
+                    reject(
+                        new Error(
+                            "O Python respondeu, mas o resultado não pôde ser interpretado."
+                        )
+                    );
+
+                }
 
             }
 
-        });
+        );
 
     });
 
 }
 
 
-// ======================================================
-// PALAVRAS QUE AUMENTAM O SCORE
-// ======================================================
+/* =========================================
+   PALAVRAS IMPORTANTES
+========================================= */
 
 const palavrasFortes = [
 
     "importante",
+    "atenção",
     "segredo",
-    "problema",
     "erro",
-    "verdade",
     "nunca",
     "sempre",
-    "mudou",
-    "mudança",
-    "descobri",
-    "aprendi",
-    "resultado",
     "melhor",
     "pior",
-    "diferença",
-    "atenção",
-    "cuidado",
-    "imagine",
-    "incrível",
-    "surpreendente",
+    "verdade",
+    "mentira",
+    "problema",
+    "solução",
+    "resultado",
+    "mudança",
+    "mudar",
+    "aprendi",
+    "descobri",
+    "motivo",
     "porque",
     "como",
-    "quando",
-    "você",
+    "agora",
+    "cuidado",
     "precisa",
-    "deve",
-    "conseguir",
-    "conseguiu",
-    "história",
-    "experiência",
-    "acredito",
-    "entenda",
-    "lembre",
+    "essencial",
     "fundamental",
-    "principal"
+    "incrível",
+    "surpreendente",
+    "ninguém",
+    "todo mundo",
+    "você",
+    "vocês",
+    "pergunta",
+    "resposta"
 
 ];
 
 
-// ======================================================
-// CALCULAR SCORE
-// ======================================================
+/* =========================================
+   SCORE DOS CORTES
+========================================= */
 
 function calcularScore(texto, duracao) {
 
-    const minusculo =
-        texto.toLowerCase();
+    const frase =
+        String(texto || "")
+            .toLowerCase();
 
 
-    let score = 40;
+    let score = 50;
 
 
-    const palavras =
-        minusculo
-            .split(/\s+/)
-            .filter(Boolean);
-
-
-    score += Math.min(
-        palavras.length / 5,
-        18
-    );
-
-
-    palavrasFortes.forEach(palavra => {
+    for (
+        const palavra of palavrasFortes
+    ) {
 
         if (
-            minusculo.includes(palavra)
+            frase.includes(palavra)
         ) {
 
-            score += 2;
+            score += 4;
 
         }
 
-    });
-
-
-    if (texto.includes("?")) {
-        score += 5;
     }
 
 
-    if (texto.includes("!")) {
+    if (
+        frase.includes("?")
+    ) {
+
+        score += 5;
+
+    }
+
+
+    if (
+        frase.includes("!")
+    ) {
+
         score += 4;
+
+    }
+
+
+    const quantidadePalavras =
+        frase
+            .split(/\s+/)
+            .filter(Boolean)
+            .length;
+
+
+    if (
+        quantidadePalavras >= 25
+    ) {
+
+        score += 5;
+
+    }
+
+
+    if (
+        quantidadePalavras >= 50
+    ) {
+
+        score += 4;
+
     }
 
 
@@ -457,61 +562,72 @@ function calcularScore(texto, duracao) {
         duracao <= 45
     ) {
 
-        score += 8;
+        score += 7;
 
     }
 
 
-    return Math.max(
-        1,
-        Math.min(
-            99,
-            Math.round(score)
-        )
+    if (
+        duracao > 45 &&
+        duracao <= 60
+    ) {
+
+        score += 4;
+
+    }
+
+
+    return Math.min(
+        Math.round(score),
+        99
     );
 
 }
 
 
-// ======================================================
-// CRIAR TÍTULO
-// ======================================================
+/* =========================================
+   TÍTULO AUTOMÁTICO
+========================================= */
 
-function criarTitulo(texto) {
+function criarTitulo(texto, indice) {
 
     const palavras =
-        texto
+        String(texto || "")
             .replace(/\s+/g, " ")
             .trim()
-            .split(" ");
+            .split(" ")
+            .filter(Boolean);
 
 
-    let titulo =
+    if (
+        palavras.length === 0
+    ) {
+
+        return `Melhor momento ${indice + 1}`;
+
+    }
+
+
+    const titulo =
         palavras
             .slice(0, 8)
             .join(" ");
 
 
-    if (palavras.length > 8) {
-        titulo += "...";
-    }
-
-
-    return (
-        titulo ||
-        "Momento em destaque"
-    );
+    return titulo.length > 60
+        ? `${titulo.slice(0, 57)}...`
+        : titulo;
 
 }
 
 
-// ======================================================
-// QUANTIDADE DE CLIPES POR DURAÇÃO
-// ======================================================
+/* =========================================
+   QUANTIDADE DE CLIPES
+========================================= */
 
 function obterConfiguracao(duracao) {
 
-    // Até 1min30
+
     if (duracao <= 90) {
 
         return {
@@ -523,7 +639,6 @@ function obterConfiguracao(duracao) {
     }
 
 
-    // Até 5 minutos
     if (duracao <= 300) {
 
         return {
@@ -535,7 +650,6 @@ function obterConfiguracao(duracao) {
     }
 
 
-    // Até 15 minutos
     if (duracao <= 900) {
 
         return {
@@ -547,7 +661,6 @@ function obterConfiguracao(duracao) {
     }
 
 
-    // Até 30 minutos
     if (duracao <= 1800) {
 
         return {
@@ -559,7 +672,6 @@ function obterConfiguracao(duracao) {
     }
 
 
-    // Até 1 hora
     if (duracao <= 3600) {
 
         return {
@@ -571,7 +683,6 @@ function obterConfiguracao(duracao) {
     }
 
 
-    // Acima de 1 hora
     return {
         quantidade: 20,
         minimo: 20,
@@ -581,9 +692,9 @@ function obterConfiguracao(duracao) {
 }
 
 
-// ======================================================
-// CRIAR CANDIDATOS
-// ======================================================
+/* =========================================
+   CRIAR CANDIDATOS
+========================================= */
 
 function criarCandidatos(
     segmentos,
@@ -595,37 +706,51 @@ function criarCandidatos(
 
 
     for (
-        let inicioIndex = 0;
-        inicioIndex < segmentos.length;
-        inicioIndex++
+        let i = 0;
+        i < segmentos.length;
+        i++
     ) {
 
-        const inicio =
+
+        let inicio =
             Number(
-                segmentos[inicioIndex].inicio
+                segmentos[i].inicio ??
+                segmentos[i].start ??
+                0
             );
 
+
+        let fim = inicio;
 
         let texto = "";
 
 
         for (
-            let fimIndex = inicioIndex;
-            fimIndex < segmentos.length;
-            fimIndex++
+            let j = i;
+            j < segmentos.length;
+            j++
         ) {
 
+
             const segmento =
-                segmentos[fimIndex];
+                segmentos[j];
+
+
+            const segmentoFim =
+                Number(
+                    segmento.fim ??
+                    segmento.end ??
+                    fim
+                );
+
+
+            fim = segmentoFim;
 
 
             texto +=
-                (texto ? " " : "") +
-                segmento.texto;
-
-
-            const fim =
-                Number(segmento.fim);
+                ` ${segmento.texto ??
+                    segmento.text ??
+                    ""}`;
 
 
             const duracao =
@@ -633,48 +758,41 @@ function criarCandidatos(
 
 
             if (
-                duracao >= minimo &&
-                duracao <= maximo
+                duracao >= minimo
             ) {
 
                 candidatos.push({
 
                     inicio:
-                        Number(
-                            inicio.toFixed(2)
+                        Math.max(
+                            0,
+                            inicio
                         ),
 
-                    fim:
-                        Number(
-                            fim.toFixed(2)
-                        ),
+                    fim,
 
-                    duracao:
-                        Number(
-                            duracao.toFixed(2)
-                        ),
+                    duracao,
 
-                    texto,
+                    texto:
+                        texto.trim(),
 
                     score:
                         calcularScore(
                             texto,
                             duracao
-                        ),
-
-                    titulo:
-                        criarTitulo(texto),
-
-                    motivo:
-                        "Momento selecionado automaticamente pelo Clip AI."
+                        )
 
                 });
 
             }
 
 
-            if (duracao > maximo) {
+            if (
+                duracao >= maximo
+            ) {
+
                 break;
+
             }
 
         }
@@ -687,23 +805,45 @@ function criarCandidatos(
 }
 
 
-// ======================================================
-// ESCOLHER OS MELHORES CORTES
-// ======================================================
+/* =========================================
+   SOBREPOSIÇÃO
+========================================= */
+
+function calcularSobreposicao(
+    a,
+    b
+) {
+
+    const inicio =
+        Math.max(
+            a.inicio,
+            b.inicio
+        );
+
+
+    const fim =
+        Math.min(
+            a.fim,
+            b.fim
+        );
+
+
+    return Math.max(
+        0,
+        fim - inicio
+    );
+
+}
+
+
+/* =========================================
+   ESCOLHER MELHORES CORTES
+========================================= */
 
 function escolherMelhoresCortes(
     segmentos,
     duracaoVideo
 ) {
-
-    if (
-        !segmentos ||
-        segmentos.length === 0
-    ) {
-
-        return [];
-
-    }
 
 
     const configuracao =
@@ -712,26 +852,27 @@ function escolherMelhoresCortes(
         );
 
 
-    console.log("");
     console.log(
         "Duração do vídeo:",
-        duracaoVideo,
-        "segundos"
+        duracaoVideo
     );
 
 
     console.log(
-        "Meta:",
-        configuracao.quantidade,
-        "clipes"
+        "Meta de clipes:",
+        configuracao.quantidade
     );
 
 
     const candidatos =
         criarCandidatos(
+
             segmentos,
+
             configuracao.minimo,
+
             configuracao.maximo
+
         );
 
 
@@ -741,7 +882,6 @@ function escolherMelhoresCortes(
     );
 
 
-    // Melhores scores primeiro
     candidatos.sort(
         (a, b) =>
             b.score - a.score
@@ -751,51 +891,28 @@ function escolherMelhoresCortes(
     const escolhidos = [];
 
 
-    // ==================================================
-    // PRIMEIRA PASSADA
-    // Evita cortes muito sobrepostos
-    // ==================================================
+    /*
+        PRIMEIRA PASSAGEM
 
-    for (const candidato of candidatos) {
+        Evita cortes muito sobrepostos.
+    */
 
-        if (
-            escolhidos.length >=
-            configuracao.quantidade
-        ) {
-            break;
-        }
+    for (
+        const candidato of candidatos
+    ) {
 
 
-        const sobrepoe =
-            escolhidos.some(outro => {
-
-                const inicioSobreposicao =
-                    Math.max(
-                        candidato.inicio,
-                        outro.inicio
-                    );
-
-
-                const fimSobreposicao =
-                    Math.min(
-                        candidato.fim,
-                        outro.fim
-                    );
+        const temSobreposicao =
+            escolhidos.some(
+                escolhido =>
+                    calcularSobreposicao(
+                        candidato,
+                        escolhido
+                    ) > 3
+            );
 
 
-                const sobreposicao =
-                    fimSobreposicao -
-                    inicioSobreposicao;
-
-
-                return (
-                    sobreposicao > 3
-                );
-
-            });
-
-
-        if (!sobrepoe) {
+        if (!temSobreposicao) {
 
             escolhidos.push(
                 candidato
@@ -803,40 +920,46 @@ function escolherMelhoresCortes(
 
         }
 
+
+        if (
+            escolhidos.length >=
+            configuracao.quantidade
+        ) {
+
+            break;
+
+        }
+
     }
 
 
-    // ==================================================
-    // SEGUNDA PASSADA
-    // Se faltarem clipes, libera um pouco mais
-    // ==================================================
+    /*
+        SEGUNDA PASSAGEM
+
+        Caso ainda faltem cortes,
+        permite candidatos próximos,
+        mas com inícios diferentes.
+    */
 
     if (
         escolhidos.length <
         configuracao.quantidade
     ) {
 
-        for (const candidato of candidatos) {
 
-            if (
-                escolhidos.length >=
-                configuracao.quantidade
-            ) {
-                break;
-            }
+        for (
+            const candidato of candidatos
+        ) {
 
 
             const jaExiste =
-                escolhidos.some(outro => {
-
-                    return (
+                escolhidos.some(
+                    escolhido =>
                         Math.abs(
-                            outro.inicio -
+                            escolhido.inicio -
                             candidato.inicio
                         ) < 8
-                    );
-
-                });
+                );
 
 
             if (!jaExiste) {
@@ -847,18 +970,33 @@ function escolherMelhoresCortes(
 
             }
 
+
+            if (
+                escolhidos.length >=
+                configuracao.quantidade
+            ) {
+
+                break;
+
+            }
+
         }
 
     }
 
 
-    // ==================================================
-    // FALLBACK PARA VÍDEOS MUITO CURTOS
-    // ==================================================
+    /*
+        FALLBACK
+
+        Caso o Whisper tenha poucos
+        segmentos.
+    */
 
     if (
-        escolhidos.length === 0
+        escolhidos.length === 0 &&
+        segmentos.length > 0
     ) {
+
 
         const primeiro =
             segmentos[0];
@@ -871,11 +1009,27 @@ function escolherMelhoresCortes(
 
 
         const inicio =
-            Number(primeiro.inicio);
+            Number(
+                primeiro.inicio ??
+                primeiro.start ??
+                0
+            );
+
+
+        const fimOriginal =
+            Number(
+                ultimo.fim ??
+                ultimo.end ??
+                duracaoVideo
+            );
 
 
         const fim =
-            Number(ultimo.fim);
+            Math.min(
+                fimOriginal,
+                inicio +
+                configuracao.maximo
+            );
 
 
         escolhidos.push({
@@ -887,27 +1041,27 @@ function escolherMelhoresCortes(
             duracao:
                 fim - inicio,
 
-            titulo:
-                criarTitulo(
-                    segmentos
-                        .map(
-                            item =>
-                                item.texto
-                        )
-                        .join(" ")
-                ),
+            texto:
+                segmentos
+                    .map(
+                        segmento =>
+                            segmento.texto ??
+                            segmento.text ??
+                            ""
+                    )
+                    .join(" ")
+                    .trim(),
 
-            score: 70,
-
-            motivo:
-                "Melhor trecho disponível."
+            score: 70
 
         });
 
     }
 
 
-    // Organizar na ordem em que aparecem no vídeo
+    /*
+        ORGANIZA EM ORDEM DO VÍDEO
+    */
 
     escolhidos.sort(
         (a, b) =>
@@ -915,179 +1069,158 @@ function escolherMelhoresCortes(
     );
 
 
-    return escolhidos.slice(
-        0,
-        configuracao.quantidade
+    const resultado =
+        escolhidos.map(
+            (corte, indice) => ({
+
+                inicio:
+                    Number(
+                        corte.inicio.toFixed(2)
+                    ),
+
+                fim:
+                    Number(
+                        corte.fim.toFixed(2)
+                    ),
+
+                titulo:
+                    criarTitulo(
+                        corte.texto,
+                        indice
+                    ),
+
+                score:
+                    corte.score,
+
+                texto:
+                    corte.texto
+
+            })
+        );
+
+
+    console.log(
+        "Cortes escolhidos:",
+        resultado.length
     );
+
+
+    return resultado;
 
 }
 
 
-// ======================================================
-// ANALISAR VÍDEO
-// ======================================================
+/* =========================================
+   ANALISAR VÍDEO
+========================================= */
 
 app.post(
     "/analisar-video",
-
     upload.single("video"),
-
     async (req, res) => {
 
-        let caminho = null;
+
+        if (!req.file) {
+
+            return res.status(400).json({
+                sucesso: false,
+                erro:
+                    "Nenhum vídeo foi enviado."
+            });
+
+        }
+
+
+        const caminhoVideo =
+            req.file.path;
+
+
+        console.log("");
+        console.log("===========================");
+        console.log("NOVO VÍDEO RECEBIDO");
+        console.log("===========================");
+
+        console.log(
+            "Arquivo:",
+            req.file.originalname
+        );
 
 
         try {
 
-            console.log("");
-            console.log(
-                "================================"
-            );
 
             console.log(
-                "CLIP AI - ANÁLISE LOCAL"
-            );
-
-            console.log(
-                "================================"
-            );
-
-
-            if (!req.file) {
-
-                return res
-                    .status(400)
-                    .json({
-
-                        erro:
-                            "Nenhum vídeo foi enviado."
-
-                    });
-
-            }
-
-
-            caminho =
-                req.file.path;
-
-
-            console.log(
-                "Arquivo:",
-                req.file.originalname
-            );
-
-
-            console.log(
-                "Tamanho:",
-                (
-                    req.file.size /
-                    1024 /
-                    1024
-                ).toFixed(2),
-                "MB"
-            );
-
-
-            // --------------------------------------------------
-            // WHISPER
-            // --------------------------------------------------
-
-            console.log("");
-            console.log(
-                "1/2 Transcrevendo com Whisper..."
+                "Iniciando transcrição..."
             );
 
 
             const transcricao =
                 await executarWhisper(
-                    caminho
+                    caminhoVideo
                 );
 
 
-            console.log("");
-            console.log(
-                "Transcrição concluída!"
-            );
+            if (
+                !transcricao ||
+                transcricao.sucesso === false
+            ) {
+
+                throw new Error(
+                    transcricao?.erro ||
+                    "Erro na transcrição."
+                );
+
+            }
+
+
+            const segmentos =
+                transcricao.segmentos || [];
+
+
+            const duracao =
+                Number(
+                    transcricao.duracao ||
+                    segmentos[
+                        segmentos.length - 1
+                    ]?.fim ||
+                    segmentos[
+                        segmentos.length - 1
+                    ]?.end ||
+                    0
+                );
 
 
             console.log(
-                "Idioma:",
-                transcricao.idioma
+                "Transcrição concluída."
             );
 
 
             console.log(
                 "Segmentos:",
-                transcricao.segmentos.length
-            );
-
-
-            // --------------------------------------------------
-            // ESCOLHER CORTES
-            // --------------------------------------------------
-
-            console.log("");
-            console.log(
-                "2/2 Selecionando melhores momentos..."
+                segmentos.length
             );
 
 
             const cortes =
                 escolherMelhoresCortes(
-
-                    transcricao.segmentos,
-
-                    Number(
-                        transcricao.duracao
-                    )
-
+                    segmentos,
+                    duracao
                 );
 
 
-            console.log("");
-            console.log(
-                "Cortes encontrados:",
-                cortes.length
-            );
-
-
-            cortes.forEach(
-                (corte, index) => {
-
-                    console.log(
-
-                        `Clipe ${index + 1}:`,
-
-                        `${corte.inicio}s → ${corte.fim}s`,
-
-                        `Score ${corte.score}`
-
-                    );
-
-                }
-            );
-
-
-            res.json({
+            return res.json({
 
                 sucesso: true,
-
-                modo: "local",
-
-                arquivo:
-                    req.file.originalname,
 
                 idioma:
                     transcricao.idioma,
 
-                duracao:
-                    transcricao.duracao,
+                duracao,
 
-                transcricao:
+                texto:
                     transcricao.texto,
 
-                segmentos:
-                    transcricao.segmentos,
+                segmentos,
 
                 cortes
 
@@ -1096,7 +1229,7 @@ app.post(
 
         } catch (erro) {
 
-            console.error("");
+
             console.error(
                 "ERRO NA ANÁLISE:"
             );
@@ -1104,39 +1237,45 @@ app.post(
             console.error(erro);
 
 
-            res
-                .status(500)
-                .json({
+            return res.status(500).json({
 
-                    sucesso: false,
+                sucesso: false,
 
-                    erro:
-                        erro.message ||
-                        "Erro ao analisar vídeo."
+                erro:
+                    erro.message ||
+                    "Erro ao analisar o vídeo."
 
-                });
+            });
 
 
         } finally {
 
-            if (
-                caminho &&
-                fs.existsSync(caminho)
-            ) {
 
-                try {
+            /*
+                APAGA O VÍDEO TEMPORÁRIO
+                após terminar a análise.
+            */
+
+            try {
+
+                if (
+                    fs.existsSync(
+                        caminhoVideo
+                    )
+                ) {
 
                     fs.unlinkSync(
-                        caminho
-                    );
-
-                } catch {
-
-                    console.log(
-                        "Não consegui apagar o arquivo temporário."
+                        caminhoVideo
                     );
 
                 }
+
+            } catch (erro) {
+
+                console.error(
+                    "Não foi possível apagar o arquivo temporário:",
+                    erro.message
+                );
 
             }
 
@@ -1146,85 +1285,73 @@ app.post(
 );
 
 
-// ======================================================
-// ERRO DE ARQUIVO GRANDE
-// ======================================================
+/* =========================================
+   SERVIR O SITE ONLINE
+========================================= */
 
-app.use(
-    (
-        erro,
-        req,
-        res,
-        next
-    ) => {
-
-        if (
-            erro instanceof multer.MulterError &&
-            erro.code === "LIMIT_FILE_SIZE"
-        ) {
-
-            return res
-                .status(413)
-                .json({
-
-                    erro:
-                        "O vídeo ultrapassou o limite de 1 GB."
-
-                });
-
-        }
+const distDir =
+    path.join(
+        __dirname,
+        "dist"
+    );
 
 
-        next(erro);
+if (
+    fs.existsSync(distDir)
+) {
 
-    }
-);
+    app.use(
+        express.static(
+            distDir
+        )
+    );
 
 
-// ======================================================
-// INICIAR SERVIDOR
-// ======================================================
+    /*
+        Se a rota não for da API,
+        entrega o index.html.
+    */
 
-app.listen(
-    PORT,
-    () => {
+    app.get("*", (req, res) => {
 
-        console.log("");
-        console.log(
-            "CLIP AI BACKEND"
+        res.sendFile(
+            path.join(
+                distDir,
+                "index.html"
+            )
         );
 
-        console.log(
-            `Servidor rodando na porta ${PORT}`
-        );
+    });
 
-        console.log("");
+}
 
-        console.log(
-            "✓ Links diretos"
-        );
 
-        console.log(
-            "✓ YouTube reconhecido"
-        );
+/* =========================================
+   INICIAR SERVIDOR
+========================================= */
 
-        console.log(
-            "✓ Whisper local"
-        );
+app.listen(PORT, () => {
 
-        console.log(
-            "✓ Vídeo curto: até 3 clipes"
-        );
+    console.log("");
+    console.log("==============================");
+    console.log("       CLIP AI BACKEND");
+    console.log("==============================");
+    console.log("");
 
-        console.log(
-            "✓ Vídeo de 1 hora: até 15 clipes"
-        );
+    console.log(
+        `Servidor rodando na porta ${PORT}`
+    );
 
-        console.log(
-            "✓ Sem créditos de API"
-        );
+    console.log("");
 
-        console.log("");
+    console.log("✓ Links diretos");
+    console.log("✓ YouTube reconhecido");
+    console.log("✓ Whisper local");
+    console.log("✓ Vídeo curto: até 3 clipes");
+    console.log("✓ Vídeo de 1 hora: até 15 clipes");
+    console.log("✓ Render preparado");
+    console.log("✓ Sem créditos de API");
 
-    }
-);
+    console.log("");
+
+});

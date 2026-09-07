@@ -1,24 +1,22 @@
 {
   "name": "clip-ai",
   "version": "1.0.0",
-  "description": "",
-  "main": "script.js",
+  "description": "Clip AI - Gerador inteligente de cortes de vídeos",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "vite",
+    "build": "vite build",
+    "start": "node server.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
     "@ffmpeg/core": "^0.12.10",
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
-    "cors": "^2.8.6",
-    "dotenv": "^17.4.2",
-    "express": "^5.2.1",
-    "multer": "^2.3.0",
-    "openai": "^7.10.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
+    "openai": "^5.19.1",
     "vite": "^8.2.2"
   }
-}
+} 
