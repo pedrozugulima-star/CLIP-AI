@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Clip AI</title>
+
+    <link
+        rel="stylesheet"
+        href="/style.css"
+    >
+
+</head>
+
+
+<body>
+
+    <!-- =========================================
+         TOPO
+    ========================================== -->
+
+    <header class="topbar">
+
+        <div class="logo">
+
+            Clip AI
+
+            <span>
+                BETA
+            </span>
+
+        </div>
+
+    </header>
+
+
+    <!-- =========================================
+         CONTEÚDO PRINCIPAL
+    ========================================== -->
+
+    <main class="container">
+
+
+        <!-- =====================================
+             HERO
+        ====================================== -->
+
+        <section class="hero">
+
+            <div class="hero-badge">
+                ✨ Inteligência Artificial
+            </div>
+
+            <h1>
+
+                Transforme vídeos longos
+
+                <span>
+                    em clipes automaticamente
+                </span>
+
+            </h1>
+
+            <p>
+
+                Envie seu vídeo e deixe o Clip AI
+                encontrar os melhores momentos para você.
+
+            </p>
+
+        </section>
+
+
+        <!-- =====================================
+             ÁREA DE ENTRADA
+        ====================================== -->
+
+        <section class="input-card">
+
+            <h2>
+                Adicione seu vídeo
+            </h2>
+
+            <p class="subtitle">
+
+                Faça upload do computador
+                ou utilize um link direto.
+
+            </p>
+
+
+            <!-- =================================
+                 LINK
+            ================================== -->
+
+            <div class="link-box">
+
+                <input
+                    type="text"
+                    id="videoLink"
+                    placeholder="Cole o link do vídeo aqui..."
+                >
+
+                <button
+                    id="linkButton"
+                    type="button"
+                >
+                    Usar link
+                </button>
+
+            </div>
+
+
+            <!-- =================================
+                 DIVISOR
+            ================================== -->
+
+            <div class="divider">
+
+                <span>
+                    ou
+                </span>
+
+            </div>
+
+
+            <!-- =================================
+                 INPUT DO ARQUIVO
+            ================================== -->
+
+            <input
+                type="file"
+                id="videoInput"
+                accept="video/*"
+                hidden
+            >
+
+
+            <button
+                id="selectButton"
+                class="upload-button"
+                type="button"
+            >
+                📁 Selecionar vídeo
+            </button>
+
+
+            <!-- =================================
+                 ARQUIVO SELECIONADO
+            ================================== -->
+
+            <div
+                id="selectedFileBox"
+                class="selected-file hidden"
+            >
+
+                <div class="file-icon">
+                    🎬
+                </div>
+
+
+                <div>
+
+                    <strong id="selectedFileName">
+                        Vídeo
+                    </strong>
+
+                    <span id="selectedFileSize">
+                    </span>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =====================================
+             PREVIEW DO VÍDEO
+        ====================================== -->
+
+        <section
+            id="previewArea"
+            class="preview-area hidden"
+        >
+
+            <h2>
+                Vídeo selecionado
+            </h2>
+
+
+            <video
+                id="videoPreview"
+                controls
+            ></video>
+
+        </section>
+
+
+        <!-- =====================================
+             ÁREA DE CORTES MANUAIS
+        ====================================== -->
+
+        <section
+            id="manualArea"
+            class="manual-area hidden"
+        >
+
+            <div class="manual-title">
+
+                <h2>
+                    Cortes
+                </h2>
+
+                <p>
+
+                    A IA escolherá os melhores momentos automaticamente.
+
+                    Você também pode adicionar cortes manualmente.
+
+                </p>
+
+            </div>
+
+
+            <!-- =================================
+                 TEMPOS
+            ================================== -->
+
+            <div class="time-grid">
+
+
+                <!-- INÍCIO -->
+
+                <div class="time-control">
+
+                    <label for="startTime">
+                        Início
+                    </label>
+
+                    <input
+                        id="startTime"
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value="0"
+                    >
+
+                    <button
+                        id="markStartButton"
+                        type="button"
+                    >
+                        Marcar posição atual
+                    </button>
+
+                </div>
+
+
+                <!-- FINAL -->
+
+                <div class="time-control">
+
+                    <label for="endTime">
+                        Final
+                    </label>
+
+                    <input
+                        id="endTime"
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value="30"
+                    >
+
+                    <button
+                        id="markEndButton"
+                        type="button"
+                    >
+                        Marcar posição atual
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <!-- =================================
+                 ADICIONAR CORTE MANUAL
+            ================================== -->
+
+            <button
+                id="addCutButton"
+                class="secondary-button"
+                type="button"
+            >
+                + Adicionar corte manual
+            </button>
+
+
+            <!-- =================================
+                 LISTA DE CORTES
+            ================================== -->
+
+            <div
+                id="cutsList"
+                class="cuts-list"
+            ></div>
+
+        </section>
+
+
+        <!-- =====================================
+             BOTÃO GERAR COM IA
+        ====================================== -->
+
+        <section class="generate-area">
+
+            <button
+                id="generateButton"
+                class="generate-button"
+                type="button"
+                disabled
+            >
+                ✨ Gerar clipes com IA
+            </button>
+
+        </section>
+
+
+        <!-- =====================================
+             PROCESSAMENTO
+        ====================================== -->
+
+        <section
+            id="processingArea"
+            class="processing-area hidden"
+        >
+        </section>
+
+
+        <!-- =====================================
+             RESULTADOS
+        ====================================== -->
+
+        <section
+            id="resultsArea"
+            class="results-area hidden"
+        >
+
+            <div class="results-heading">
+
+                <span class="results-badge">
+                    ✨ Clip AI
+                </span>
+
+
+                <h2>
+                    Seus clipes estão prontos
+                </h2>
+
+
+                <p>
+
+                    Assista aos vídeos
+                    e baixe cada clipe individualmente.
+
+                </p>
+
+            </div>
+
+
+            <!-- =================================
+                 GRID DOS CLIPES
+            ================================== -->
+
+            <div
+                id="clipsGrid"
+                class="clips-grid"
+            >
+            </div>
+
+        </section>
+
+
+    </main>
+
+
+    <!-- =========================================
+         JAVASCRIPT
+    ========================================== -->
+
+    <script
+        type="module"
+        src="/script.js"
+    ></script>
+
+
+</body>
+
+</html>

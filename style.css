@@ -1,0 +1,949 @@
+/* =========================================
+   CONFIGURAÇÃO GERAL
+========================================= */
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    min-height: 100vh;
+
+    font-family: Arial, Helvetica, sans-serif;
+
+    background:
+        radial-gradient(
+            circle at top,
+            #281c52 0%,
+            #120d25 45%,
+            #090712 100%
+        );
+
+    color: #ffffff;
+}
+
+button,
+input {
+    font: inherit;
+}
+
+button {
+    cursor: pointer;
+}
+
+.hidden {
+    display: none !important;
+}
+
+
+/* =========================================
+   TOPO
+========================================= */
+
+.topbar {
+    height: 72px;
+
+    display: flex;
+    align-items: center;
+
+    padding: 0 32px;
+
+    border-bottom:
+        1px solid rgba(255, 255, 255, 0.08);
+
+    background:
+        rgba(11, 8, 24, 0.75);
+
+    backdrop-filter: blur(15px);
+}
+
+.logo {
+    font-size: 24px;
+    font-weight: 800;
+
+    letter-spacing: -0.5px;
+}
+
+.logo span {
+    margin-left: 7px;
+
+    padding: 4px 7px;
+
+    border-radius: 6px;
+
+    font-size: 10px;
+
+    background:
+        linear-gradient(
+            135deg,
+            #8d5cff,
+            #d16dff
+        );
+}
+
+
+/* =========================================
+   CONTAINER
+========================================= */
+
+.container {
+    width:
+        min(
+            1120px,
+            calc(100% - 32px)
+        );
+
+    margin: 0 auto;
+
+    padding: 60px 0 100px;
+}
+
+
+/* =========================================
+   HERO
+========================================= */
+
+.hero {
+    max-width: 800px;
+
+    margin: 0 auto 38px;
+
+    text-align: center;
+}
+
+.hero-badge {
+    display: inline-block;
+
+    margin-bottom: 16px;
+
+    padding: 8px 14px;
+
+    border:
+        1px solid rgba(172, 128, 255, 0.35);
+
+    border-radius: 100px;
+
+    color: #d6c4ff;
+
+    background:
+        rgba(120, 74, 226, 0.15);
+
+    font-size: 13px;
+}
+
+.hero h1 {
+    font-size:
+        clamp(
+            34px,
+            5vw,
+            58px
+        );
+
+    line-height: 1.05;
+
+    letter-spacing: -2px;
+}
+
+.hero h1 span {
+    display: block;
+
+    background:
+        linear-gradient(
+            90deg,
+            #9b72ff,
+            #d480ff
+        );
+
+    -webkit-background-clip: text;
+    background-clip: text;
+
+    color: transparent;
+}
+
+.hero p {
+    max-width: 620px;
+
+    margin: 20px auto 0;
+
+    color: #b8b2ca;
+
+    font-size: 17px;
+
+    line-height: 1.6;
+}
+
+
+/* =========================================
+   CARDS PRINCIPAIS
+========================================= */
+
+.input-card,
+.preview-area,
+.manual-area,
+.results-area {
+    border:
+        1px solid rgba(255, 255, 255, 0.09);
+
+    border-radius: 24px;
+
+    background:
+        rgba(255, 255, 255, 0.045);
+
+    box-shadow:
+        0 30px 80px rgba(0, 0, 0, 0.25);
+}
+
+
+/* =========================================
+   ÁREA DE ENTRADA
+========================================= */
+
+.input-card {
+    max-width: 760px;
+
+    margin: 0 auto;
+
+    padding: 32px;
+
+    text-align: center;
+}
+
+.input-card h2 {
+    font-size: 23px;
+}
+
+.subtitle {
+    margin-top: 8px;
+
+    color: #9992ac;
+
+    font-size: 14px;
+}
+
+
+/* =========================================
+   CAMPO DE LINK
+========================================= */
+
+.link-box {
+    display: flex;
+
+    gap: 10px;
+
+    margin-top: 28px;
+}
+
+.link-box input {
+    flex: 1;
+
+    min-width: 0;
+
+    padding: 15px 17px;
+
+    border:
+        1px solid rgba(255, 255, 255, 0.12);
+
+    outline: none;
+
+    border-radius: 12px;
+
+    color: #ffffff;
+
+    background: #100c20;
+}
+
+.link-box input:focus {
+    border-color: #9168ff;
+}
+
+.link-box button {
+    padding: 0 20px;
+
+    border: none;
+
+    border-radius: 12px;
+
+    color: #ffffff;
+
+    font-weight: 700;
+
+    background: #7750e8;
+}
+
+.link-box button:hover {
+    background: #875ff0;
+}
+
+.link-box button:disabled {
+    cursor: not-allowed;
+
+    opacity: 0.5;
+}
+
+
+/* =========================================
+   DIVISOR
+========================================= */
+
+.divider {
+    display: flex;
+
+    align-items: center;
+
+    gap: 12px;
+
+    margin: 24px 0;
+
+    color: #777085;
+
+    font-size: 12px;
+}
+
+.divider::before,
+.divider::after {
+    content: "";
+
+    flex: 1;
+
+    height: 1px;
+
+    background:
+        rgba(255, 255, 255, 0.08);
+}
+
+
+/* =========================================
+   BOTÃO DE UPLOAD
+========================================= */
+
+.upload-button {
+    width: 100%;
+
+    padding: 16px;
+
+    border:
+        1px dashed rgba(176, 142, 255, 0.45);
+
+    border-radius: 13px;
+
+    color: #ffffff;
+
+    font-weight: 700;
+
+    background:
+        rgba(116, 74, 223, 0.12);
+}
+
+.upload-button:hover {
+    background:
+        rgba(116, 74, 223, 0.2);
+}
+
+
+/* =========================================
+   ARQUIVO SELECIONADO
+========================================= */
+
+.selected-file {
+    display: flex;
+
+    align-items: center;
+
+    gap: 12px;
+
+    margin-top: 22px;
+
+    padding: 14px;
+
+    border-radius: 13px;
+
+    text-align: left;
+
+    background:
+        rgba(255, 255, 255, 0.05);
+}
+
+.file-icon {
+    width: 44px;
+    height: 44px;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    flex-shrink: 0;
+
+    border-radius: 10px;
+
+    background:
+        rgba(127, 84, 239, 0.2);
+}
+
+.selected-file strong,
+.selected-file span {
+    display: block;
+}
+
+.selected-file span {
+    margin-top: 3px;
+
+    color: #948da4;
+
+    font-size: 12px;
+}
+
+
+/* =========================================
+   PREVIEW DO VÍDEO ORIGINAL
+========================================= */
+
+.preview-area {
+    max-width: 850px;
+
+    margin: 32px auto 0;
+
+    padding: 24px;
+}
+
+.preview-area h2 {
+    margin-bottom: 16px;
+}
+
+#videoPreview {
+    display: block;
+
+    width: 100%;
+
+    max-height: 520px;
+
+    border-radius: 15px;
+
+    background: #000000;
+}
+
+
+/* =========================================
+   ÁREA DE CORTES MANUAIS
+========================================= */
+
+.manual-area {
+    max-width: 850px;
+
+    margin: 24px auto 0;
+
+    padding: 24px;
+}
+
+.manual-title p {
+    margin-top: 5px;
+
+    color: #938ca4;
+
+    font-size: 13px;
+}
+
+.time-grid {
+    display: grid;
+
+    grid-template-columns:
+        repeat(
+            2,
+            minmax(0, 1fr)
+        );
+
+    gap: 16px;
+
+    margin-top: 22px;
+}
+
+.time-control {
+    padding: 15px;
+
+    border-radius: 13px;
+
+    background:
+        rgba(0, 0, 0, 0.16);
+}
+
+.time-control label {
+    display: block;
+
+    margin-bottom: 8px;
+
+    font-size: 13px;
+
+    color: #bbb4c9;
+}
+
+.time-control input {
+    width: 100%;
+
+    padding: 11px;
+
+    border:
+        1px solid rgba(255, 255, 255, 0.1);
+
+    border-radius: 9px;
+
+    outline: none;
+
+    color: #ffffff;
+
+    background: #0d0a18;
+}
+
+.time-control input:focus {
+    border-color: #9168ff;
+}
+
+.time-control button {
+    width: 100%;
+
+    margin-top: 8px;
+
+    padding: 9px;
+
+    border: none;
+
+    border-radius: 8px;
+
+    color: #d6c8ff;
+
+    background:
+        rgba(125, 78, 236, 0.18);
+}
+
+.secondary-button {
+    margin-top: 16px;
+
+    padding: 11px 16px;
+
+    border:
+        1px solid rgba(255, 255, 255, 0.11);
+
+    border-radius: 10px;
+
+    color: #ffffff;
+
+    background:
+        rgba(255, 255, 255, 0.05);
+}
+
+
+/* =========================================
+   LISTA DE CORTES
+========================================= */
+
+.cuts-list {
+    display: grid;
+
+    gap: 9px;
+
+    margin-top: 18px;
+}
+
+.pending-cut {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    gap: 12px;
+
+    padding: 12px 14px;
+
+    border:
+        1px solid rgba(255, 255, 255, 0.07);
+
+    border-radius: 11px;
+
+    background:
+        rgba(255, 255, 255, 0.035);
+}
+
+.pending-cut div div {
+    margin-top: 4px;
+
+    color: #a29aaa;
+
+    font-size: 12px;
+}
+
+.pending-cut strong {
+    font-size: 13px;
+}
+
+.remove-cut {
+    width: 31px;
+    height: 31px;
+
+    flex-shrink: 0;
+
+    border: none;
+
+    border-radius: 8px;
+
+    color: #ffffff;
+
+    background:
+        rgba(255, 80, 110, 0.17);
+}
+
+.remove-cut:hover {
+    background:
+        rgba(255, 80, 110, 0.3);
+}
+
+
+/* =========================================
+   BOTÃO GERAR COM IA
+========================================= */
+
+.generate-area {
+    display: flex;
+
+    justify-content: center;
+
+    margin: 34px 0;
+}
+
+.generate-button {
+    min-width: 280px;
+
+    padding: 17px 30px;
+
+    border: none;
+
+    border-radius: 14px;
+
+    color: #ffffff;
+
+    font-size: 16px;
+
+    font-weight: 800;
+
+    box-shadow:
+        0 14px 40px rgba(120, 70, 235, 0.35);
+
+    background:
+        linear-gradient(
+            135deg,
+            #7148e8,
+            #ae63ff
+        );
+}
+
+.generate-button:hover:not(:disabled) {
+    transform: translateY(-1px);
+
+    filter: brightness(1.08);
+}
+
+.generate-button:disabled {
+    cursor: not-allowed;
+
+    opacity: 0.45;
+}
+
+
+/* =========================================
+   PROCESSAMENTO
+========================================= */
+
+.processing-area {
+    max-width: 700px;
+
+    margin: 20px auto;
+
+    padding: 24px;
+
+    border:
+        1px solid rgba(145, 99, 255, 0.22);
+
+    border-radius: 16px;
+
+    text-align: center;
+
+    line-height: 1.7;
+
+    color: #c8b8ef;
+
+    background:
+        rgba(100, 60, 200, 0.08);
+}
+
+
+/* =========================================
+   ÁREA DE RESULTADOS
+========================================= */
+
+.results-area {
+    width: 100%;
+
+    margin-top: 35px;
+
+    padding: 28px;
+}
+
+.results-heading {
+    margin-bottom: 28px;
+
+    text-align: center;
+}
+
+.results-heading h2 {
+    margin-top: 8px;
+
+    font-size: 28px;
+}
+
+.results-heading p {
+    margin-top: 8px;
+
+    color: #928a9f;
+}
+
+.results-badge {
+    display: inline-block;
+
+    padding: 6px 10px;
+
+    border-radius: 100px;
+
+    font-size: 11px;
+
+    color: #dccaff;
+
+    background:
+        rgba(130, 80, 230, 0.18);
+}
+
+
+/* =========================================
+   GRID DOS CLIPES
+
+   Os clipes ficam médios e lado a lado.
+========================================= */
+
+#clipsGrid,
+.clips-grid {
+    display: grid;
+
+    grid-template-columns:
+        repeat(
+            auto-fit,
+            minmax(220px, 260px)
+        );
+
+    gap: 24px;
+
+    justify-content: center;
+
+    align-items: start;
+
+    width: 100%;
+}
+
+
+/* =========================================
+   CARD DO CLIPE
+========================================= */
+
+.clip-card {
+    width: 100%;
+
+    max-width: 260px;
+
+    margin: 0 auto;
+
+    overflow: hidden;
+
+    border:
+        1px solid rgba(255, 255, 255, 0.09);
+
+    border-radius: 18px;
+
+    background: #120e20;
+
+    box-shadow:
+        0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+
+/* =========================================
+   VÍDEO VERTICAL 9:16
+========================================= */
+
+.clip-video-wrapper {
+    position: relative;
+
+    width: 100%;
+
+    aspect-ratio: 9 / 16;
+
+    overflow: hidden;
+
+    background: #000000;
+}
+
+.clip-video {
+    display: block;
+
+    width: 100% !important;
+    height: 100% !important;
+
+    aspect-ratio: 9 / 16;
+
+    object-fit: cover;
+
+    background: #000000;
+}
+
+
+/* =========================================
+   CONTEÚDO DO CARD
+========================================= */
+
+.clip-content {
+    padding: 14px;
+}
+
+.clip-score {
+    display: inline-block;
+
+    margin-bottom: 9px;
+
+    padding: 5px 8px;
+
+    border-radius: 7px;
+
+    font-size: 11px;
+
+    font-weight: 700;
+
+    color: #ffd7a6;
+
+    background:
+        rgba(255, 160, 70, 0.12);
+}
+
+.clip-content h3 {
+    margin-bottom: 9px;
+
+    font-size: 15px;
+
+    line-height: 1.35;
+}
+
+.clip-content p {
+    margin-top: 4px;
+
+    color: #938c9f;
+
+    font-size: 12px;
+}
+
+
+/* =========================================
+   BOTÃO DE DOWNLOAD
+========================================= */
+
+.download-button {
+    display: block;
+
+    width: 100%;
+
+    margin-top: 14px;
+
+    padding: 11px;
+
+    border-radius: 10px;
+
+    text-align: center;
+
+    text-decoration: none;
+
+    color: #ffffff;
+
+    font-size: 13px;
+
+    font-weight: 700;
+
+    background:
+        linear-gradient(
+            135deg,
+            #7048e8,
+            #955ef3
+        );
+}
+
+.download-button:hover {
+    filter: brightness(1.1);
+}
+
+
+/* =========================================
+   RESPONSIVO - CELULAR
+========================================= */
+
+@media (max-width: 700px) {
+
+    .topbar {
+        padding: 0 18px;
+    }
+
+
+    .container {
+        width:
+            calc(100% - 20px);
+
+        padding-top: 35px;
+    }
+
+
+    .hero h1 {
+        letter-spacing: -1px;
+    }
+
+
+    .input-card {
+        padding: 22px 16px;
+    }
+
+
+    .link-box {
+        flex-direction: column;
+    }
+
+
+    .link-box button {
+        padding: 14px;
+    }
+
+
+    .time-grid {
+        grid-template-columns: 1fr;
+    }
+
+
+    #clipsGrid,
+    .clips-grid {
+        grid-template-columns:
+            minmax(210px, 250px);
+    }
+
+
+    .clip-card {
+        max-width: 250px;
+    }
+
+
+    .results-area {
+        padding: 20px 12px;
+    }
+
+}
