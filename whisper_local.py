@@ -1,761 +1,377 @@
 import sys
 import os
 import json
-import uuid
-import mimetypes
-import urllib.request
-import urllib.error
+import subprocess
+import tempfile
+from pathlib import Path
+
+try:
+    from groq import Groq
+except ImportError:
+    Groq = None
 
 
-# ==========================================================
-# CONFIGURAÇÕES
-# ==========================================================
-
-GROQ_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
-
-GROQ_MODEL = os.getenv(
-    "GROQ_WHISPER_MODEL",
-    "whisper-large-v3-turbo"
-)
+MODEL = os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3-turbo")
 
 
-# ==========================================================
-# LOG
-# Tudo que for log vai para STDERR.
-# O Node recebe somente o JSON pelo STDOUT.
-# ==========================================================
+def log(msg):
+    print(msg, file=sys.stderr, flush=True)
 
-def log(*args):
-    print(
-        *args,
-        file=sys.stderr,
-        flush=True
+
+def localizar_ffmpeg():
+    base = Path(__file__).resolve().parent
+
+    candidatos = [
+        base / "node_modules" / "ffmpeg-static" / "ffmpeg.exe",
+        base / "node_modules" / "ffmpeg-static" / "ffmpeg",
+        Path("ffmpeg"),
+    ]
+
+    for candidato in candidatos:
+        if str(candidato) == "ffmpeg":
+            return "ffmpeg"
+
+        if candidato.exists():
+            return str(candidato)
+
+    return "ffmpeg"
+
+
+def extrair_audio(video_path):
+    ffmpeg = localizar_ffmpeg()
+
+    temp_dir = tempfile.mkdtemp(prefix="clip_ai_")
+    audio_path = os.path.join(temp_dir, "audio.flac")
+
+    comando = [
+        ffmpeg,
+        "-y",
+        "-i",
+        video_path,
+        "-vn",
+        "-ar",
+        "16000",
+        "-ac",
+        "1",
+        "-map",
+        "0:a:0",
+        "-c:a",
+        "flac",
+        audio_path,
+    ]
+
+    log("Extraindo áudio para envio à Groq...")
+
+    processo = subprocess.run(
+        comando,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
     )
 
-
-# ==========================================================
-# RESPOSTA DE ERRO
-# ==========================================================
-
-def responder_erro(mensagem):
-    resultado = {
-        "sucesso": False,
-        "erro": str(mensagem)
-    }
-
-    print(
-        json.dumps(
-            resultado,
-            ensure_ascii=False
-        ),
-        flush=True
-    )
-
-
-# ==========================================================
-# MULTIPART FORM-DATA
-# Sem biblioteca externa.
-# Assim não precisamos instalar SDK da Groq.
-# ==========================================================
-
-def adicionar_campo(
-    partes,
-    boundary,
-    nome,
-    valor
-):
-    partes.append(
-        f"--{boundary}\r\n".encode()
-    )
-
-    partes.append(
-        (
-            f'Content-Disposition: form-data; '
-            f'name="{nome}"\r\n\r\n'
-        ).encode()
-    )
-
-    partes.append(
-        str(valor).encode("utf-8")
-    )
-
-    partes.append(
-        b"\r\n"
-    )
-
-
-def adicionar_arquivo(
-    partes,
-    boundary,
-    caminho
-):
-    nome_arquivo = os.path.basename(
-        caminho
-    )
-
-    mime_type = (
-        mimetypes.guess_type(
-            nome_arquivo
-        )[0]
-        or
-        "application/octet-stream"
-    )
-
-    partes.append(
-        f"--{boundary}\r\n".encode()
-    )
-
-    partes.append(
-        (
-            f'Content-Disposition: form-data; '
-            f'name="file"; '
-            f'filename="{nome_arquivo}"\r\n'
-        ).encode()
-    )
-
-    partes.append(
-        (
-            f"Content-Type: {mime_type}\r\n\r\n"
-        ).encode()
-    )
-
-    with open(
-        caminho,
-        "rb"
-    ) as arquivo:
-        partes.append(
-            arquivo.read()
-        )
-
-    partes.append(
-        b"\r\n"
-    )
-
-
-# ==========================================================
-# CHAMAR GROQ
-# ==========================================================
-
-def transcrever_com_groq(
-    caminho_video
-):
-    api_key = os.getenv(
-        "GROQ_API_KEY"
-    )
-
-    if not api_key:
+    if processo.returncode != 0:
         raise RuntimeError(
-            "GROQ_API_KEY não foi configurada."
+            "Erro ao extrair áudio com FFmpeg:\n"
+            + processo.stderr[-3000:]
         )
 
-    if not os.path.exists(
-        caminho_video
-    ):
-        raise RuntimeError(
-            "Arquivo de vídeo não encontrado."
-        )
+    if not os.path.exists(audio_path):
+        raise RuntimeError("O arquivo de áudio não foi criado.")
 
-    tamanho = os.path.getsize(
-        caminho_video
-    )
+    tamanho_mb = os.path.getsize(audio_path) / (1024 * 1024)
 
-    tamanho_mb = tamanho / (
-        1024 * 1024
-    )
+    log(f"Áudio criado: {audio_path}")
+    log(f"Tamanho do áudio: {tamanho_mb:.2f} MB")
 
-    log(
-        "================================"
-    )
-    log(
-        "CLIP AI - GROQ WHISPER"
-    )
-    log(
-        "================================"
-    )
-    log(
-        f"Arquivo: {caminho_video}"
-    )
-    log(
-        f"Tamanho: {tamanho_mb:.2f} MB"
-    )
-    log(
-        f"Modelo: {GROQ_MODEL}"
-    )
-    log(
-        "Enviando para Groq..."
-    )
-
-    boundary = (
-        "----ClipAI"
-        +
-        uuid.uuid4().hex
-    )
-
-    partes = []
-
-    adicionar_campo(
-        partes,
-        boundary,
-        "model",
-        GROQ_MODEL
-    )
-
-    adicionar_campo(
-        partes,
-        boundary,
-        "response_format",
-        "verbose_json"
-    )
-
-    adicionar_campo(
-        partes,
-        boundary,
-        "temperature",
-        "0"
-    )
-
-    # Português melhora velocidade
-    # e precisão no nosso caso.
-    adicionar_campo(
-        partes,
-        boundary,
-        "language",
-        "pt"
-    )
-
-    # Precisamos dos segmentos para
-    # encontrar os melhores cortes.
-    adicionar_campo(
-        partes,
-        boundary,
-        "timestamp_granularities[]",
-        "segment"
-    )
-
-    # Precisamos das palavras para
-    # gerar as legendas sincronizadas.
-    adicionar_campo(
-        partes,
-        boundary,
-        "timestamp_granularities[]",
-        "word"
-    )
-
-    adicionar_arquivo(
-        partes,
-        boundary,
-        caminho_video
-    )
-
-    partes.append(
-        f"--{boundary}--\r\n".encode()
-    )
-
-    corpo = b"".join(
-        partes
-    )
-
-    requisicao = urllib.request.Request(
-        GROQ_URL,
-        data=corpo,
-        method="POST"
-    )
-
-    requisicao.add_header(
-        "Authorization",
-        f"Bearer {api_key}"
-    )
-
-    requisicao.add_header(
-        "Content-Type",
-        (
-            "multipart/form-data; "
-            f"boundary={boundary}"
-        )
-    )
-
-    requisicao.add_header(
-        "Content-Length",
-        str(
-            len(corpo)
-        )
-    )
-
-    try:
-        with urllib.request.urlopen(
-            requisicao,
-            timeout=300
-        ) as resposta:
-
-            conteudo = (
-                resposta
-                .read()
-                .decode(
-                    "utf-8"
-                )
-            )
-
-    except urllib.error.HTTPError as erro:
-
-        try:
-            detalhe = (
-                erro
-                .read()
-                .decode(
-                    "utf-8",
-                    errors="replace"
-                )
-            )
-
-        except Exception:
-            detalhe = str(
-                erro
-            )
-
-        raise RuntimeError(
-            f"Groq respondeu HTTP {erro.code}: "
-            f"{detalhe}"
-        )
-
-    except urllib.error.URLError as erro:
-
-        raise RuntimeError(
-            "Não foi possível conectar à Groq: "
-            f"{erro}"
-        )
-
-    try:
-        dados = json.loads(
-            conteudo
-        )
-
-    except json.JSONDecodeError:
-        raise RuntimeError(
-            "A Groq respondeu em um formato inválido."
-        )
-
-    log(
-        "Transcrição recebida da Groq."
-    )
-
-    return dados
+    return audio_path, temp_dir
 
 
-# ==========================================================
-# CONVERTER PALAVRAS
-# ==========================================================
+def pegar_valor(obj, nome, padrao=None):
+    if isinstance(obj, dict):
+        return obj.get(nome, padrao)
 
-def converter_palavras(
-    palavras_groq
-):
-    palavras = []
+    return getattr(obj, nome, padrao)
 
-    for item in (
-        palavras_groq or []
-    ):
-        palavra = str(
-            item.get(
-                "word",
-                ""
-            )
-        ).strip()
 
-        inicio = float(
-            item.get(
-                "start",
-                0
-            )
-            or 0
-        )
+def normalizar_palavras(words):
+    resultado = []
 
-        fim = float(
-            item.get(
-                "end",
-                inicio
-            )
-            or inicio
-        )
+    if not words:
+        return resultado
+
+    for item in words:
+        palavra = pegar_valor(item, "word", "")
+        inicio = pegar_valor(item, "start", 0)
+        fim = pegar_valor(item, "end", 0)
+
+        if palavra is None:
+            palavra = ""
+
+        palavra = str(palavra).strip()
 
         if not palavra:
             continue
 
-        palavras.append(
+        try:
+            inicio = float(inicio or 0)
+        except Exception:
+            inicio = 0.0
+
+        try:
+            fim = float(fim or inicio)
+        except Exception:
+            fim = inicio
+
+        resultado.append(
             {
                 "palavra": palavra,
                 "inicio": inicio,
                 "fim": fim,
-
-                # Mantemos também os nomes
-                # originais por segurança.
                 "word": palavra,
                 "start": inicio,
-                "end": fim
+                "end": fim,
             }
         )
-
-    return palavras
-
-
-# ==========================================================
-# ENCONTRAR PALAVRAS DE CADA SEGMENTO
-# ==========================================================
-
-def palavras_do_segmento(
-    todas_palavras,
-    inicio_segmento,
-    fim_segmento
-):
-    resultado = []
-
-    for palavra in todas_palavras:
-
-        inicio_palavra = float(
-            palavra.get(
-                "inicio",
-                0
-            )
-        )
-
-        fim_palavra = float(
-            palavra.get(
-                "fim",
-                inicio_palavra
-            )
-        )
-
-        # A palavra pertence ao segmento
-        # quando existe sobreposição.
-        if (
-            fim_palavra >=
-            inicio_segmento - 0.05
-            and
-            inicio_palavra <=
-            fim_segmento + 0.05
-        ):
-            resultado.append(
-                palavra
-            )
 
     return resultado
 
 
-# ==========================================================
-# CONVERTER SEGMENTOS
-# ==========================================================
+def normalizar_segmentos(segments, palavras_globais):
+    resultado = []
 
-def converter_segmentos(
-    segmentos_groq,
-    palavras
-):
-    segmentos = []
+    if not segments:
+        return resultado
 
-    for indice, item in enumerate(
-        segmentos_groq or []
-    ):
+    for indice, segmento in enumerate(segments):
+        inicio = pegar_valor(segmento, "start", 0)
+        fim = pegar_valor(segmento, "end", 0)
+        texto = pegar_valor(segmento, "text", "")
 
-        inicio = float(
-            item.get(
-                "start",
-                0
-            )
-            or 0
-        )
+        try:
+            inicio = float(inicio or 0)
+        except Exception:
+            inicio = 0.0
 
-        fim = float(
-            item.get(
-                "end",
-                inicio
-            )
-            or inicio
-        )
+        try:
+            fim = float(fim or inicio)
+        except Exception:
+            fim = inicio
 
-        texto = str(
-            item.get(
-                "text",
-                ""
-            )
-        ).strip()
+        texto = str(texto or "").strip()
 
-        palavras_segmento = (
-            palavras_do_segmento(
-                palavras,
-                inicio,
-                fim
-            )
-        )
+        palavras_segmento = []
 
-        segmentos.append(
+        for palavra in palavras_globais:
+            p_inicio = palavra["inicio"]
+            p_fim = palavra["fim"]
+
+            if p_fim >= inicio and p_inicio <= fim:
+                palavras_segmento.append(palavra)
+
+        resultado.append(
             {
-                "id": item.get(
-                    "id",
-                    indice
-                ),
-
+                "id": indice,
                 "inicio": inicio,
                 "fim": fim,
                 "texto": texto,
-                "palavras":
-                    palavras_segmento,
-
-                # Também deixamos os campos
-                # no padrão original.
+                "palavras": palavras_segmento,
                 "start": inicio,
                 "end": fim,
-                "text": texto
+                "text": texto,
             }
         )
 
-    return segmentos
+    return resultado
 
 
-# ==========================================================
-# SEGMENTO DE EMERGÊNCIA
-# Caso a API retorne palavras mas não segmentos.
-# ==========================================================
-
-def criar_segmentos_por_palavras(
-    palavras,
-    texto_completo
-):
-    if not palavras:
-        return []
-
+def criar_segmentos_por_palavras(palavras):
     segmentos = []
 
-    quantidade = 12
+    if not palavras:
+        return segmentos
 
-    for i in range(
-        0,
-        len(palavras),
-        quantidade
-    ):
-        grupo = palavras[
-            i:
-            i + quantidade
-        ]
+    bloco = 12
+
+    for i in range(0, len(palavras), bloco):
+        grupo = palavras[i : i + bloco]
 
         if not grupo:
             continue
 
-        inicio = grupo[0][
-            "inicio"
-        ]
-
-        fim = grupo[-1][
-            "fim"
-        ]
+        inicio = grupo[0]["inicio"]
+        fim = grupo[-1]["fim"]
 
         texto = " ".join(
-            item["palavra"]
-            for item in grupo
-        )
+            palavra["palavra"]
+            for palavra in grupo
+        ).strip()
 
         segmentos.append(
             {
-                "id": len(
-                    segmentos
-                ),
+                "id": len(segmentos),
                 "inicio": inicio,
                 "fim": fim,
                 "texto": texto,
                 "palavras": grupo,
                 "start": inicio,
                 "end": fim,
-                "text": texto
-            }
-        )
-
-    # Último recurso:
-    # existe texto mas nenhuma palavra.
-    if (
-        not segmentos
-        and
-        texto_completo
-    ):
-        segmentos.append(
-            {
-                "id": 0,
-                "inicio": 0,
-                "fim": 1,
-                "texto":
-                    texto_completo,
-                "palavras": [],
-                "start": 0,
-                "end": 1,
-                "text":
-                    texto_completo
+                "text": texto,
             }
         )
 
     return segmentos
 
 
-# ==========================================================
-# NORMALIZAR RESPOSTA PARA O SERVER.JS
-# ==========================================================
+def converter_resposta(transcricao):
+    texto = pegar_valor(transcricao, "text", "") or ""
+    idioma = pegar_valor(transcricao, "language", "pt") or "pt"
+    duracao = pegar_valor(transcricao, "duration", 0) or 0
 
-def normalizar_resposta(
-    dados
-):
-    texto = str(
-        dados.get(
-            "text",
-            ""
-        )
-        or ""
-    ).strip()
+    words = pegar_valor(transcricao, "words", []) or []
+    segments = pegar_valor(transcricao, "segments", []) or []
 
-    idioma = str(
-        dados.get(
-            "language",
-            "pt"
-        )
-        or "pt"
-    )
+    palavras = normalizar_palavras(words)
+    segmentos = normalizar_segmentos(segments, palavras)
 
-    palavras = converter_palavras(
-        dados.get(
-            "words",
-            []
-        )
-    )
+    if not segmentos and palavras:
+        segmentos = criar_segmentos_por_palavras(palavras)
 
-    segmentos = converter_segmentos(
-        dados.get(
-            "segments",
-            []
-        ),
-        palavras
-    )
-
-    if not segmentos:
-        segmentos = (
-            criar_segmentos_por_palavras(
-                palavras,
-                texto
-            )
-        )
-
-    duracao = dados.get(
-        "duration"
-    )
+    if not texto and segmentos:
+        texto = " ".join(
+            segmento["texto"]
+            for segmento in segmentos
+        ).strip()
 
     try:
-        duracao = float(
-            duracao
-        )
+        duracao = float(duracao)
+    except Exception:
+        duracao = 0.0
 
-    except (
-        TypeError,
-        ValueError
-    ):
-        duracao = 0
+    if duracao <= 0 and palavras:
+        duracao = palavras[-1]["fim"]
 
-    if (
-        duracao <= 0
-        and
-        segmentos
-    ):
-        duracao = float(
-            segmentos[-1][
-                "fim"
-            ]
-        )
-
-    if (
-        duracao <= 0
-        and
-        palavras
-    ):
-        duracao = float(
-            palavras[-1][
-                "fim"
-            ]
-        )
-
-    log(
-        f"Idioma: {idioma}"
-    )
-    log(
-        f"Duração: {duracao:.2f}s"
-    )
-    log(
-        f"Segmentos: {len(segmentos)}"
-    )
-    log(
-        f"Palavras: {len(palavras)}"
-    )
+    if duracao <= 0 and segmentos:
+        duracao = segmentos[-1]["fim"]
 
     return {
         "sucesso": True,
         "idioma": idioma,
         "duracao": duracao,
         "texto": texto,
-        "segmentos": segmentos
+        "segmentos": segmentos,
     }
 
 
-# ==========================================================
-# MAIN
-# ==========================================================
+def transcrever(audio_path):
+    api_key = os.getenv("GROQ_API_KEY")
+
+    if not api_key:
+        raise RuntimeError(
+            "GROQ_API_KEY não foi configurada."
+        )
+
+    if Groq is None:
+        raise RuntimeError(
+            "Biblioteca 'groq' não instalada. "
+            "Adicione groq no requirements.txt."
+        )
+
+    client = Groq(api_key=api_key)
+
+    log("==============================")
+    log("CLIP AI - GROQ WHISPER")
+    log("==============================")
+    log(f"Modelo: {MODEL}")
+    log("Enviando áudio para Groq...")
+
+    with open(audio_path, "rb") as arquivo:
+        resposta = client.audio.transcriptions.create(
+            file=(os.path.basename(audio_path), arquivo.read()),
+            model=MODEL,
+            response_format="verbose_json",
+            timestamp_granularities=["word", "segment"],
+            language="pt",
+            temperature=0.0,
+        )
+
+    log("Transcrição recebida da Groq.")
+
+    return converter_resposta(resposta)
+
+
+def limpar_temp(temp_dir):
+    try:
+        if not temp_dir:
+            return
+
+        for nome in os.listdir(temp_dir):
+            caminho = os.path.join(temp_dir, nome)
+
+            try:
+                os.remove(caminho)
+            except Exception:
+                pass
+
+        try:
+            os.rmdir(temp_dir)
+        except Exception:
+            pass
+
+    except Exception:
+        pass
+
 
 def main():
-
-    if len(
-        sys.argv
-    ) < 2:
-        responder_erro(
-            "Nenhum vídeo foi informado."
-        )
-        sys.exit(
-            1
-        )
-
-    caminho_video = (
-        sys.argv[1]
-    )
+    temp_dir = None
 
     try:
-        dados = (
-            transcrever_com_groq(
-                caminho_video
+        if len(sys.argv) < 2:
+            raise RuntimeError(
+                "Informe o caminho do vídeo."
             )
-        )
 
-        resultado = (
-            normalizar_resposta(
-                dados
+        video_path = sys.argv[1]
+
+        if not os.path.exists(video_path):
+            raise RuntimeError(
+                f"Arquivo não encontrado: {video_path}"
             )
-        )
 
-        # IMPORTANTE:
-        # somente este JSON vai para STDOUT.
+        tamanho_video = os.path.getsize(video_path) / (1024 * 1024)
+
+        log(f"Arquivo: {video_path}")
+        log(f"Tamanho do vídeo: {tamanho_video:.2f} MB")
+
+        audio_path, temp_dir = extrair_audio(video_path)
+
+        resultado = transcrever(audio_path)
+
         print(
             json.dumps(
                 resultado,
-                ensure_ascii=False
+                ensure_ascii=False,
             ),
-            flush=True
+            flush=True,
         )
 
     except Exception as erro:
+        log(f"ERRO: {erro}")
 
-        log(
-            "ERRO GROQ:",
-            str(
-                erro
-            )
+        print(
+            json.dumps(
+                {
+                    "sucesso": False,
+                    "erro": str(erro),
+                },
+                ensure_ascii=False,
+            ),
+            flush=True,
         )
 
-        responder_erro(
-            str(
-                erro
-            )
-        )
+        sys.exit(1)
 
-        sys.exit(
-            1
-        )
+    finally:
+        limpar_temp(temp_dir)
 
 
 if __name__ == "__main__":
