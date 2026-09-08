@@ -10,7 +10,12 @@
         content="width=device-width, initial-scale=1.0"
     >
 
-    <title>Clip AI</title>
+    <meta
+        name="theme-color"
+        content="#080b09"
+    >
+
+    <title>Clip AI — Cortes inteligentes para vídeos</title>
 
     <link
         rel="stylesheet"
@@ -22,23 +27,46 @@
 
 <body>
 
+
     <!-- =========================================
          TOPO
     ========================================== -->
 
     <header class="topbar">
 
-        <div class="logo">
+        <div class="topbar-content">
 
-            Clip AI
+            <a
+                href="/"
+                class="brand"
+                aria-label="Clip AI"
+            >
 
-            <span>
-                BETA
-            </span>
+                <div class="brand-mark">
+                    C
+                </div>
+
+                <div class="brand-name">
+                    CLIP<span>AI</span>
+                </div>
+
+            </a>
+
+
+            <div class="topbar-status">
+
+                <span class="status-dot"></span>
+
+                <span>
+                    BETA
+                </span>
+
+            </div>
 
         </div>
 
     </header>
+
 
 
     <!-- =========================================
@@ -54,41 +82,164 @@
 
         <section class="hero">
 
-            <div class="hero-badge">
-                ✨ Inteligência Artificial
+            <div class="hero-eyebrow">
+
+                <span class="eyebrow-dot"></span>
+
+                CORTES INTELIGENTES PARA VÍDEOS
+
             </div>
+
 
             <h1>
 
-                Transforme vídeos longos
+                Um vídeo.
 
                 <span>
-                    em clipes automaticamente
+                    Vários conteúdos.
                 </span>
 
             </h1>
 
-            <p>
+
+            <p class="hero-description">
 
                 Envie seu vídeo e deixe o Clip AI
-                encontrar os melhores momentos para você.
+                encontrar os melhores momentos,
+                criar os cortes e preparar tudo
+                para suas redes sociais.
 
             </p>
 
+
+            <div class="hero-features">
+
+                <div class="hero-feature">
+
+                    <span class="feature-check">
+                        ✓
+                    </span>
+
+                    Cortes automáticos
+
+                </div>
+
+
+                <div class="hero-feature">
+
+                    <span class="feature-check">
+                        ✓
+                    </span>
+
+                    Formato vertical
+
+                </div>
+
+
+                <div class="hero-feature">
+
+                    <span class="feature-check">
+                        ✓
+                    </span>
+
+                    Legendas automáticas
+
+                </div>
+
+            </div>
+
         </section>
+
+
+
+        <!-- =====================================
+             FAIXAS DECORATIVAS
+        ====================================== -->
+
+        <div class="visual-stripes">
+
+            <div class="visual-stripe stripe-green">
+
+                <span>
+                    CLIP AI
+                </span>
+
+                <span>
+                    CORTES INTELIGENTES
+                </span>
+
+                <span>
+                    VÍDEO VERTICAL
+                </span>
+
+                <span>
+                    LEGENDAS AUTOMÁTICAS
+                </span>
+
+            </div>
+
+
+            <div class="visual-stripe stripe-black">
+
+                <span>
+                    CREATE
+                </span>
+
+                <span>
+                    CUT
+                </span>
+
+                <span>
+                    PUBLISH
+                </span>
+
+                <span>
+                    REPEAT
+                </span>
+
+            </div>
+
+        </div>
+
 
 
         <!-- =====================================
              ÁREA DE ENTRADA
         ====================================== -->
 
-        <section class="input-card">
+        <section class="workspace input-card">
 
-            <h2>
-                Adicione seu vídeo
-            </h2>
+            <div class="workspace-header">
 
-            <p class="subtitle">
+                <div>
+
+                    <span class="section-label">
+                        NOVO PROJETO
+                    </span>
+
+                    <h2>
+                        Adicione seu vídeo
+                    </h2>
+
+                </div>
+
+
+                <div class="step-indicator">
+
+                    <span class="step-number">
+                        01
+                    </span>
+
+                    <span class="step-text">
+                        Upload
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <p class="workspace-description">
 
                 Faça upload do computador
                 ou utilize um link direto.
@@ -96,26 +247,70 @@
             </p>
 
 
+
             <!-- =================================
                  LINK
             ================================== -->
 
-            <div class="link-box">
+            <div class="upload-link-area">
 
-                <input
-                    type="text"
-                    id="videoLink"
-                    placeholder="Cole o link do vídeo aqui..."
-                >
+                <label class="upload-label">
+                    Link do vídeo
+                </label>
 
-                <button
-                    id="linkButton"
-                    type="button"
-                >
-                    Usar link
-                </button>
+
+                <div class="link-box">
+
+                    <div class="link-input-wrapper">
+
+                        <svg
+                            class="input-icon"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            aria-hidden="true"
+                        >
+
+                            <path
+                                d="M10 13A5 5 0 0 0 17.54 13.54L20.54 10.54A5 5 0 0 0 13.47 3.47L11.75 5.18"
+                                stroke="currentColor"
+                                stroke-width="1.8"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+
+                            <path
+                                d="M14 11A5 5 0 0 0 6.46 10.46L3.46 13.46A5 5 0 0 0 10.53 20.53L12.24 18.82"
+                                stroke="currentColor"
+                                stroke-width="1.8"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+
+                        </svg>
+
+
+                        <input
+                            type="text"
+                            id="videoLink"
+                            placeholder="Cole o link do vídeo aqui..."
+                            autocomplete="off"
+                        >
+
+                    </div>
+
+
+                    <button
+                        id="linkButton"
+                        class="link-button"
+                        type="button"
+                    >
+                        Usar link
+                    </button>
+
+                </div>
 
             </div>
+
 
 
             <!-- =================================
@@ -124,15 +319,20 @@
 
             <div class="divider">
 
-                <span>
-                    ou
-                </span>
+                <span></span>
+
+                <p>
+                    OU
+                </p>
+
+                <span></span>
 
             </div>
 
 
+
             <!-- =================================
-                 INPUT DO ARQUIVO
+                 UPLOAD
             ================================== -->
 
             <input
@@ -145,11 +345,64 @@
 
             <button
                 id="selectButton"
-                class="upload-button"
+                class="upload-zone"
                 type="button"
             >
-                📁 Selecionar vídeo
+
+                <div class="upload-icon">
+
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden="true"
+                    >
+
+                        <path
+                            d="M12 16V4"
+                            stroke="currentColor"
+                            stroke-width="1.8"
+                            stroke-linecap="round"
+                        />
+
+                        <path
+                            d="M7.5 8.5L12 4L16.5 8.5"
+                            stroke="currentColor"
+                            stroke-width="1.8"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+
+                        <path
+                            d="M5 14V18C5 19.1 5.9 20 7 20H17C18.1 20 19 19.1 19 18V14"
+                            stroke="currentColor"
+                            stroke-width="1.8"
+                            stroke-linecap="round"
+                        />
+
+                    </svg>
+
+                </div>
+
+
+                <div class="upload-copy">
+
+                    <strong>
+                        Selecionar vídeo
+                    </strong>
+
+                    <span>
+                        Escolha um vídeo do seu computador
+                    </span>
+
+                </div>
+
+
+                <div class="upload-action">
+                    Procurar
+                </div>
+
             </button>
+
 
 
             <!-- =================================
@@ -161,20 +414,47 @@
                 class="selected-file hidden"
             >
 
-                <div class="file-icon">
-                    🎬
+                <div class="selected-file-icon">
+
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden="true"
+                    >
+
+                        <rect
+                            x="4"
+                            y="5"
+                            width="16"
+                            height="14"
+                            rx="2"
+                            stroke="currentColor"
+                            stroke-width="1.8"
+                        />
+
+                        <path
+                            d="M10 9L15 12L10 15V9Z"
+                            fill="currentColor"
+                        />
+
+                    </svg>
+
                 </div>
 
 
-                <div>
+                <div class="selected-file-info">
 
                     <strong id="selectedFileName">
                         Vídeo
                     </strong>
 
-                    <span id="selectedFileSize">
-                    </span>
+                    <span id="selectedFileSize"></span>
 
+                </div>
+
+
+                <div class="selected-file-status">
+                    Pronto
                 </div>
 
             </div>
@@ -182,8 +462,9 @@
         </section>
 
 
+
         <!-- =====================================
-             PREVIEW DO VÍDEO
+             PREVIEW
         ====================================== -->
 
         <section
@@ -191,21 +472,52 @@
             class="preview-area hidden"
         >
 
-            <h2>
-                Vídeo selecionado
-            </h2>
+            <div class="section-heading">
+
+                <div>
+
+                    <span class="section-label">
+                        PREVIEW
+                    </span>
+
+                    <h2>
+                        Seu vídeo
+                    </h2>
+
+                </div>
 
 
-            <video
-                id="videoPreview"
-                controls
-            ></video>
+                <div class="step-indicator">
+
+                    <span class="step-number">
+                        02
+                    </span>
+
+                    <span class="step-text">
+                        Revisão
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <div class="video-preview-wrapper">
+
+                <video
+                    id="videoPreview"
+                    controls
+                    playsinline
+                ></video>
+
+            </div>
 
         </section>
 
 
+
         <!-- =====================================
-             ÁREA DE CORTES MANUAIS
+             CORTES MANUAIS
         ====================================== -->
 
         <section
@@ -213,77 +525,102 @@
             class="manual-area hidden"
         >
 
-            <div class="manual-title">
+            <div class="section-heading">
 
-                <h2>
-                    Cortes
-                </h2>
+                <div>
 
-                <p>
+                    <span class="section-label">
+                        OPCIONAL
+                    </span>
 
-                    A IA escolherá os melhores momentos automaticamente.
+                    <h2>
+                        Ajuste manual
+                    </h2>
 
-                    Você também pode adicionar cortes manualmente.
-
-                </p>
+                </div>
 
             </div>
 
 
-            <!-- =================================
-                 TEMPOS
-            ================================== -->
+            <p class="section-description">
+
+                O Clip AI seleciona os melhores momentos
+                automaticamente. Use esta área somente
+                se quiser definir um trecho específico.
+
+            </p>
+
+
 
             <div class="time-grid">
 
 
-                <!-- INÍCIO -->
-
                 <div class="time-control">
 
                     <label for="startTime">
-                        Início
+                        Início do corte
                     </label>
 
-                    <input
-                        id="startTime"
-                        type="number"
-                        min="0"
-                        step="0.1"
-                        value="0"
-                    >
+
+                    <div class="time-input-row">
+
+                        <input
+                            id="startTime"
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            value="0"
+                        >
+
+                        <span>
+                            seg
+                        </span>
+
+                    </div>
+
 
                     <button
                         id="markStartButton"
+                        class="text-button"
                         type="button"
                     >
-                        Marcar posição atual
+                        Usar posição atual
                     </button>
 
                 </div>
 
 
-                <!-- FINAL -->
 
                 <div class="time-control">
 
                     <label for="endTime">
-                        Final
+                        Final do corte
                     </label>
 
-                    <input
-                        id="endTime"
-                        type="number"
-                        min="0"
-                        step="0.1"
-                        value="30"
-                    >
+
+                    <div class="time-input-row">
+
+                        <input
+                            id="endTime"
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            value="30"
+                        >
+
+                        <span>
+                            seg
+                        </span>
+
+                    </div>
+
 
                     <button
                         id="markEndButton"
+                        class="text-button"
                         type="button"
                     >
-                        Marcar posição atual
+                        Usar posição atual
                     </button>
 
                 </div>
@@ -291,22 +628,22 @@
             </div>
 
 
-            <!-- =================================
-                 ADICIONAR CORTE MANUAL
-            ================================== -->
 
             <button
                 id="addCutButton"
                 class="secondary-button"
                 type="button"
             >
-                + Adicionar corte manual
+
+                <span>
+                    +
+                </span>
+
+                Adicionar corte manual
+
             </button>
 
 
-            <!-- =================================
-                 LISTA DE CORTES
-            ================================== -->
 
             <div
                 id="cutsList"
@@ -316,11 +653,26 @@
         </section>
 
 
+
         <!-- =====================================
-             BOTÃO GERAR COM IA
+             GERAR
         ====================================== -->
 
         <section class="generate-area">
+
+            <div class="generate-copy">
+
+                <span class="section-label">
+                    TUDO PRONTO?
+                </span>
+
+                <p>
+                    A análise encontra automaticamente
+                    os trechos com maior potencial.
+                </p>
+
+            </div>
+
 
             <button
                 id="generateButton"
@@ -328,10 +680,39 @@
                 type="button"
                 disabled
             >
-                ✨ Gerar clipes com IA
+
+                <span>
+                    Gerar clipes
+                </span>
+
+
+                <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    aria-hidden="true"
+                >
+
+                    <path
+                        d="M5 12H19"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                    />
+
+                    <path
+                        d="M14 7L19 12L14 17"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    />
+
+                </svg>
+
             </button>
 
         </section>
+
 
 
         <!-- =====================================
@@ -342,7 +723,70 @@
             id="processingArea"
             class="processing-area hidden"
         >
+
+            <div class="processing-card">
+
+                <div class="processing-top">
+
+                    <div class="processing-symbol">
+
+                        <span></span>
+                        <span></span>
+                        <span></span>
+
+                    </div>
+
+
+                    <div class="processing-status">
+                        PROCESSANDO
+                    </div>
+
+                </div>
+
+
+                <h2 id="processingTitle">
+                    Preparando seu vídeo
+                </h2>
+
+
+                <p id="processingText">
+
+                    Aguarde enquanto o Clip AI
+                    encontra os melhores momentos.
+
+                </p>
+
+
+                <div class="progress-wrapper">
+
+                    <div class="progress-info">
+
+                        <span>
+                            Progresso
+                        </span>
+
+                        <span class="progress-label">
+                            Clip AI
+                        </span>
+
+                    </div>
+
+
+                    <div class="progress-track">
+
+                        <div
+                            id="progressBar"
+                            class="progress-bar"
+                        ></div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
         </section>
+
 
 
         <!-- =====================================
@@ -356,35 +800,42 @@
 
             <div class="results-heading">
 
-                <span class="results-badge">
-                    ✨ Clip AI
-                </span>
+                <div>
+
+                    <span class="section-label">
+                        RESULTADO
+                    </span>
+
+                    <h2>
+                        Seus clipes estão prontos.
+                    </h2>
+
+                    <p>
+
+                        Revise os melhores momentos
+                        e baixe os clipes que quiser publicar.
+
+                    </p>
+
+                </div>
 
 
-                <h2>
-                    Seus clipes estão prontos
-                </h2>
+                <div class="results-status">
 
+                    <span></span>
 
-                <p>
+                    Finalizado
 
-                    Assista aos vídeos
-                    e baixe cada clipe individualmente.
-
-                </p>
+                </div>
 
             </div>
 
 
-            <!-- =================================
-                 GRID DOS CLIPES
-            ================================== -->
 
             <div
                 id="clipsGrid"
                 class="clips-grid"
-            >
-            </div>
+            ></div>
 
         </section>
 
@@ -392,9 +843,28 @@
     </main>
 
 
+
     <!-- =========================================
-         JAVASCRIPT
+         RODAPÉ
     ========================================== -->
+
+    <footer class="footer">
+
+        <div class="footer-content">
+
+            <div class="footer-brand">
+                CLIP<span>AI</span>
+            </div>
+
+            <p>
+                Transforme conteúdo longo em momentos que importam.
+            </p>
+
+        </div>
+
+    </footer>
+
+
 
     <script
         type="module"
