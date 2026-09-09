@@ -293,6 +293,12 @@ function executarYtDlp(
 
                 "--restrict-filenames",
 
+                "--js-runtimes",
+                "node",
+
+                "--extractor-args",
+                "youtube:player_client=mweb",
+
                 "--ffmpeg-location",
                 ffmpegCommand,
 
