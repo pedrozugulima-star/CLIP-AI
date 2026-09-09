@@ -1,47 +1,44 @@
-import sys
 import os
+import sys
 import json
 import subprocess
 import tempfile
+import shutil
 from pathlib import Path
 
-try:
-    from groq import Groq
-except ImportError:
-    Groq = None
+from groq import Groq
 
 
 MODEL = os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3-turbo")
 
 
-def log(msg):
-    print(msg, file=sys.stderr, flush=True)
+def log(mensagem):
+    print(mensagem, file=sys.stderr, flush=True)
 
 
-def localizar_ffmpeg():
-    base = Path(__file__).resolve().parent
+def obter_ffmpeg():
+    projeto = Path(__file__).resolve().parent
 
     candidatos = [
-        base / "node_modules" / "ffmpeg-static" / "ffmpeg.exe",
-        base / "node_modules" / "ffmpeg-static" / "ffmpeg",
-        Path("ffmpeg"),
+        projeto / "node_modules" / "ffmpeg-static" / "ffmpeg.exe",
+        projeto / "node_modules" / "ffmpeg-static" / "ffmpeg",
     ]
 
     for candidato in candidatos:
-        if str(candidato) == "ffmpeg":
-            return "ffmpeg"
-
         if candidato.exists():
             return str(candidato)
 
     return "ffmpeg"
 
 
-def extrair_audio(video_path):
-    ffmpeg = localizar_ffmpeg()
+def tamanho_mb(caminho):
+    return os.path.getsize(caminho) / (1024 * 1024)
 
-    temp_dir = tempfile.mkdtemp(prefix="clip_ai_")
-    audio_path = os.path.join(temp_dir, "audio.flac")
+
+def extrair_audio(video_path, audio_path):
+    ffmpeg = obter_ffmpeg()
+
+    log("Extraindo áudio comprimido para envio à Groq...")
 
     comando = [
         ffmpeg,
@@ -53,81 +50,74 @@ def extrair_audio(video_path):
         "16000",
         "-ac",
         "1",
-        "-map",
-        "0:a:0",
         "-c:a",
-        "flac",
+        "libmp3lame",
+        "-b:a",
+        "32k",
         audio_path,
     ]
-
-    log("Extraindo áudio para envio à Groq...")
 
     processo = subprocess.run(
         comando,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding="utf-8",
+        errors="ignore",
     )
 
     if processo.returncode != 0:
         raise RuntimeError(
-            "Erro ao extrair áudio com FFmpeg:\n"
-            + processo.stderr[-3000:]
+            "Erro ao extrair o áudio:\n" + processo.stderr[-3000:]
         )
 
     if not os.path.exists(audio_path):
         raise RuntimeError("O arquivo de áudio não foi criado.")
 
-    tamanho_mb = os.path.getsize(audio_path) / (1024 * 1024)
-
     log(f"Áudio criado: {audio_path}")
-    log(f"Tamanho do áudio: {tamanho_mb:.2f} MB")
-
-    return audio_path, temp_dir
+    log(f"Tamanho do áudio: {tamanho_mb(audio_path):.2f} MB")
 
 
-def pegar_valor(obj, nome, padrao=None):
-    if isinstance(obj, dict):
-        return obj.get(nome, padrao)
+def valor(objeto, nome, padrao=None):
+    if objeto is None:
+        return padrao
 
-    return getattr(obj, nome, padrao)
+    if isinstance(objeto, dict):
+        return objeto.get(nome, padrao)
+
+    return getattr(objeto, nome, padrao)
 
 
-def normalizar_palavras(words):
+def normalizar_palavras(palavras):
     resultado = []
 
-    if not words:
+    if not palavras:
         return resultado
 
-    for item in words:
-        palavra = pegar_valor(item, "word", "")
-        inicio = pegar_valor(item, "start", 0)
-        fim = pegar_valor(item, "end", 0)
+    for item in palavras:
+        palavra = valor(item, "word", "")
+        inicio = valor(item, "start", 0)
+        fim = valor(item, "end", inicio)
 
         if palavra is None:
             palavra = ""
 
-        palavra = str(palavra).strip()
-
-        if not palavra:
-            continue
-
         try:
-            inicio = float(inicio or 0)
+            inicio = float(inicio)
         except Exception:
             inicio = 0.0
 
         try:
-            fim = float(fim or inicio)
+            fim = float(fim)
         except Exception:
             fim = inicio
 
         resultado.append(
             {
-                "palavra": palavra,
+                "palavra": str(palavra),
                 "inicio": inicio,
                 "fim": fim,
-                "word": palavra,
+                "word": str(palavra),
                 "start": inicio,
                 "end": fim,
             }
@@ -136,156 +126,99 @@ def normalizar_palavras(words):
     return resultado
 
 
-def normalizar_segmentos(segments, palavras_globais):
+def normalizar_segmentos(segmentos, palavras):
     resultado = []
 
-    if not segments:
+    if segmentos:
+        for indice, segmento in enumerate(segmentos):
+            inicio = valor(segmento, "start", 0)
+            fim = valor(segmento, "end", inicio)
+            texto = valor(segmento, "text", "")
+
+            try:
+                inicio = float(inicio)
+            except Exception:
+                inicio = 0.0
+
+            try:
+                fim = float(fim)
+            except Exception:
+                fim = inicio
+
+            palavras_segmento = []
+
+            for palavra in palavras:
+                p_inicio = palavra["inicio"]
+                p_fim = palavra["fim"]
+
+                if p_fim >= inicio and p_inicio <= fim:
+                    palavras_segmento.append(palavra)
+
+            resultado.append(
+                {
+                    "id": indice,
+                    "inicio": inicio,
+                    "fim": fim,
+                    "texto": str(texto or "").strip(),
+                    "palavras": palavras_segmento,
+                    "start": inicio,
+                    "end": fim,
+                    "text": str(texto or "").strip(),
+                }
+            )
+
         return resultado
 
-    for indice, segmento in enumerate(segments):
-        inicio = pegar_valor(segmento, "start", 0)
-        fim = pegar_valor(segmento, "end", 0)
-        texto = pegar_valor(segmento, "text", "")
+    # Fallback caso a Groq retorne palavras, mas não segmentos
+    if palavras:
+        tamanho_bloco = 12
 
-        try:
-            inicio = float(inicio or 0)
-        except Exception:
-            inicio = 0.0
+        for indice in range(0, len(palavras), tamanho_bloco):
+            bloco = palavras[indice:indice + tamanho_bloco]
 
-        try:
-            fim = float(fim or inicio)
-        except Exception:
-            fim = inicio
+            if not bloco:
+                continue
 
-        texto = str(texto or "").strip()
+            inicio = bloco[0]["inicio"]
+            fim = bloco[-1]["fim"]
+            texto = " ".join(
+                item["palavra"].strip()
+                for item in bloco
+                if item["palavra"].strip()
+            )
 
-        palavras_segmento = []
-
-        for palavra in palavras_globais:
-            p_inicio = palavra["inicio"]
-            p_fim = palavra["fim"]
-
-            if p_fim >= inicio and p_inicio <= fim:
-                palavras_segmento.append(palavra)
-
-        resultado.append(
-            {
-                "id": indice,
-                "inicio": inicio,
-                "fim": fim,
-                "texto": texto,
-                "palavras": palavras_segmento,
-                "start": inicio,
-                "end": fim,
-                "text": texto,
-            }
-        )
+            resultado.append(
+                {
+                    "id": len(resultado),
+                    "inicio": inicio,
+                    "fim": fim,
+                    "texto": texto,
+                    "palavras": bloco,
+                    "start": inicio,
+                    "end": fim,
+                    "text": texto,
+                }
+            )
 
     return resultado
-
-
-def criar_segmentos_por_palavras(palavras):
-    segmentos = []
-
-    if not palavras:
-        return segmentos
-
-    bloco = 12
-
-    for i in range(0, len(palavras), bloco):
-        grupo = palavras[i : i + bloco]
-
-        if not grupo:
-            continue
-
-        inicio = grupo[0]["inicio"]
-        fim = grupo[-1]["fim"]
-
-        texto = " ".join(
-            palavra["palavra"]
-            for palavra in grupo
-        ).strip()
-
-        segmentos.append(
-            {
-                "id": len(segmentos),
-                "inicio": inicio,
-                "fim": fim,
-                "texto": texto,
-                "palavras": grupo,
-                "start": inicio,
-                "end": fim,
-                "text": texto,
-            }
-        )
-
-    return segmentos
-
-
-def converter_resposta(transcricao):
-    texto = pegar_valor(transcricao, "text", "") or ""
-    idioma = pegar_valor(transcricao, "language", "pt") or "pt"
-    duracao = pegar_valor(transcricao, "duration", 0) or 0
-
-    words = pegar_valor(transcricao, "words", []) or []
-    segments = pegar_valor(transcricao, "segments", []) or []
-
-    palavras = normalizar_palavras(words)
-    segmentos = normalizar_segmentos(segments, palavras)
-
-    if not segmentos and palavras:
-        segmentos = criar_segmentos_por_palavras(palavras)
-
-    if not texto and segmentos:
-        texto = " ".join(
-            segmento["texto"]
-            for segmento in segmentos
-        ).strip()
-
-    try:
-        duracao = float(duracao)
-    except Exception:
-        duracao = 0.0
-
-    if duracao <= 0 and palavras:
-        duracao = palavras[-1]["fim"]
-
-    if duracao <= 0 and segmentos:
-        duracao = segmentos[-1]["fim"]
-
-    return {
-        "sucesso": True,
-        "idioma": idioma,
-        "duracao": duracao,
-        "texto": texto,
-        "segmentos": segmentos,
-    }
 
 
 def transcrever(audio_path):
     api_key = os.getenv("GROQ_API_KEY")
 
     if not api_key:
-        raise RuntimeError(
-            "GROQ_API_KEY não foi configurada."
-        )
+        raise RuntimeError("GROQ_API_KEY não foi configurada.")
 
-    if Groq is None:
-        raise RuntimeError(
-            "Biblioteca 'groq' não instalada. "
-            "Adicione groq no requirements.txt."
-        )
+    cliente = Groq(api_key=api_key)
 
-    client = Groq(api_key=api_key)
-
-    log("==============================")
+    log("=" * 32)
     log("CLIP AI - GROQ WHISPER")
-    log("==============================")
+    log("=" * 32)
     log(f"Modelo: {MODEL}")
-    log("Enviando áudio para Groq...")
+    log(f"Enviando áudio para a Groq ({tamanho_mb(audio_path):.2f} MB)...")
 
     with open(audio_path, "rb") as arquivo:
-        resposta = client.audio.transcriptions.create(
+        resposta = cliente.audio.transcriptions.create(
             file=(os.path.basename(audio_path), arquivo.read()),
             model=MODEL,
             response_format="verbose_json",
@@ -296,53 +229,58 @@ def transcrever(audio_path):
 
     log("Transcrição recebida da Groq.")
 
-    return converter_resposta(resposta)
+    texto = valor(resposta, "text", "") or ""
+    idioma = valor(resposta, "language", "pt") or "pt"
+    duracao = valor(resposta, "duration", 0) or 0
 
-
-def limpar_temp(temp_dir):
     try:
-        if not temp_dir:
-            return
-
-        for nome in os.listdir(temp_dir):
-            caminho = os.path.join(temp_dir, nome)
-
-            try:
-                os.remove(caminho)
-            except Exception:
-                pass
-
-        try:
-            os.rmdir(temp_dir)
-        except Exception:
-            pass
-
+        duracao = float(duracao)
     except Exception:
-        pass
+        duracao = 0.0
+
+    palavras_brutas = valor(resposta, "words", []) or []
+    segmentos_brutos = valor(resposta, "segments", []) or []
+
+    palavras = normalizar_palavras(palavras_brutas)
+    segmentos = normalizar_segmentos(segmentos_brutos, palavras)
+
+    return {
+        "sucesso": True,
+        "idioma": idioma,
+        "duracao": duracao,
+        "texto": texto,
+        "segmentos": segmentos,
+    }
 
 
 def main():
-    temp_dir = None
+    pasta_temporaria = None
 
     try:
         if len(sys.argv) < 2:
-            raise RuntimeError(
-                "Informe o caminho do vídeo."
-            )
+            raise RuntimeError("Nenhum vídeo foi informado.")
 
         video_path = sys.argv[1]
 
         if not os.path.exists(video_path):
-            raise RuntimeError(
-                f"Arquivo não encontrado: {video_path}"
-            )
-
-        tamanho_video = os.path.getsize(video_path) / (1024 * 1024)
+            raise RuntimeError(f"Arquivo não encontrado: {video_path}")
 
         log(f"Arquivo: {video_path}")
-        log(f"Tamanho do vídeo: {tamanho_video:.2f} MB")
+        log(f"Tamanho do vídeo: {tamanho_mb(video_path):.2f} MB")
 
-        audio_path, temp_dir = extrair_audio(video_path)
+        pasta_temporaria = tempfile.mkdtemp(prefix="clip_ai_")
+        audio_path = os.path.join(pasta_temporaria, "audio.mp3")
+
+        extrair_audio(video_path, audio_path)
+
+        tamanho_audio = tamanho_mb(audio_path)
+
+        if tamanho_audio >= 24:
+            raise RuntimeError(
+                f"O áudio comprimido ainda ficou muito grande "
+                f"({tamanho_audio:.2f} MB). "
+                "Será necessário dividir o áudio em partes."
+            )
 
         resultado = transcrever(audio_path)
 
@@ -357,12 +295,14 @@ def main():
     except Exception as erro:
         log(f"ERRO: {erro}")
 
+        resultado = {
+            "sucesso": False,
+            "erro": str(erro),
+        }
+
         print(
             json.dumps(
-                {
-                    "sucesso": False,
-                    "erro": str(erro),
-                },
+                resultado,
                 ensure_ascii=False,
             ),
             flush=True,
@@ -371,7 +311,11 @@ def main():
         sys.exit(1)
 
     finally:
-        limpar_temp(temp_dir)
+        if pasta_temporaria and os.path.exists(pasta_temporaria):
+            try:
+                shutil.rmtree(pasta_temporaria)
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":
