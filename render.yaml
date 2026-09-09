@@ -1,0 +1,38 @@
+services:
+  # Serviço que recebe o link do YouTube e entrega a mídia
+  - type: web
+    name: clip-ai-cobalt
+    runtime: image
+    plan: free
+
+    image:
+      url: ghcr.io/imputnet/cobalt:11
+
+    envVars:
+      - key: API_URL
+        value: https://clip-ai-cobalt.onrender.com/
+
+      - key: API_PORT
+        value: "9000"
+
+      - key: API_LISTEN_ADDRESS
+        value: 0.0.0.0
+
+      - key: CORS_WILDCARD
+        value: "1"
+
+      - key: YOUTUBE_SESSION_SERVER
+        value: https://clip-ai-yt-session.onrender.com/
+
+      - key: YOUTUBE_SESSION_INNERTUBE_CLIENT
+        value: WEB_EMBEDDED
+
+
+  # Serviço auxiliar que gera poToken e visitor_data para o YouTube
+  - type: web
+    name: clip-ai-yt-session
+    runtime: image
+    plan: free
+
+    image:
+      url: ghcr.io/imputnet/yt-session-generator:webserver
