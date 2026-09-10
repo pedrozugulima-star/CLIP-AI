@@ -493,22 +493,18 @@ async function processarTrabalhoYoutube(
         atualizarTrabalho(
             trabalho,
             "processando",
-            "Otimizando vídeo em 720p...",
-            55
+            "Preparando o vídeo para envio, sem recompressão...",
+            85
         );
 
-        const arquivoOtimizado =
-            await comprimirVideo(
-                arquivoOriginal,
-                trabalho.pastaTemporaria
-            );
-
-        trabalho.arquivo = arquivoOtimizado;
+        // O yt-dlp já baixa em MP4 e limita a qualidade a 720p.
+        // Usamos o arquivo diretamente para não reconverter vídeos longos.
+        trabalho.arquivo = arquivoOriginal;
 
         atualizarTrabalho(
             trabalho,
             "pronto",
-            "Vídeo pronto para envio.",
+            "Vídeo pronto para envio, sem recompressão.",
             90
         );
 
