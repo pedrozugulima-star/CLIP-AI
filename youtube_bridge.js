@@ -453,6 +453,7 @@ function resumoTrabalho(trabalho) {
         jobId: trabalho.jobId,
         status: trabalho.status,
         etapa: trabalho.etapa,
+        progresso: trabalho.progresso || 0,
         erro: trabalho.erro || null,
         criadoEm: trabalho.criadoEm,
         atualizadoEm: trabalho.atualizadoEm
@@ -462,10 +463,12 @@ function resumoTrabalho(trabalho) {
 function atualizarTrabalho(
     trabalho,
     status,
-    etapa
+    etapa,
+    progresso = trabalho.progresso || 0
 ) {
     trabalho.status = status;
     trabalho.etapa = etapa;
+    trabalho.progresso = progresso;
     trabalho.atualizadoEm = Date.now();
 }
 
@@ -477,7 +480,8 @@ async function processarTrabalhoYoutube(
         atualizarTrabalho(
             trabalho,
             "processando",
-            "Baixando vídeo do YouTube..."
+            "Baixando vídeo do YouTube...",
+            15
         );
 
         const arquivoOriginal =
@@ -489,7 +493,8 @@ async function processarTrabalhoYoutube(
         atualizarTrabalho(
             trabalho,
             "processando",
-            "Otimizando vídeo em 720p..."
+            "Otimizando vídeo em 720p...",
+            55
         );
 
         const arquivoOtimizado =
@@ -503,7 +508,8 @@ async function processarTrabalhoYoutube(
         atualizarTrabalho(
             trabalho,
             "pronto",
-            "Vídeo pronto para envio."
+            "Vídeo pronto para envio.",
+            90
         );
 
         console.log("");
@@ -522,7 +528,8 @@ async function processarTrabalhoYoutube(
         atualizarTrabalho(
             trabalho,
             "erro",
-            "Falha no processamento."
+            "Falha no processamento.",
+            trabalho.progresso || 0
         );
 
         console.error(
@@ -676,6 +683,7 @@ app.post(
             jobId,
             status: "aguardando",
             etapa: "Trabalho recebido.",
+            progresso: 5,
             erro: null,
             arquivo: null,
             pastaTemporaria:

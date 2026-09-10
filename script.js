@@ -28,6 +28,18 @@ const videoLink =
 const linkButton =
     document.getElementById("linkButton");
 
+const youtubeProgressArea =
+    document.getElementById("youtubeProgressArea");
+
+const youtubeProgressTitle =
+    document.getElementById("youtubeProgressTitle");
+
+const youtubeProgressText =
+    document.getElementById("youtubeProgressText");
+
+const youtubeProgressBar =
+    document.getElementById("youtubeProgressBar");
+
 const selectedFileBox =
     document.getElementById("selectedFileBox");
 
@@ -667,41 +679,59 @@ linkButton?.addEventListener(
 
 
         mostrar(
-            processingArea
+            youtubeProgressArea
         );
 
-        atualizarProcessamento(
-            "Preparando vídeo do YouTube",
-            "Conectando com a ponte de download..."
-        );
+        youtubeProgressTitle.innerText =
+            "Preparando vídeo do YouTube";
 
-        progressBar?.classList.add(
-            "youtube-loading"
-        );
+        youtubeProgressText.innerText =
+            "Conectando com a ponte de download...";
 
-        const etapasYoutube = [
-            "Baixando o vídeo do YouTube...",
-            "Otimização em andamento. Vídeos maiores podem demorar alguns minutos...",
-            "Preparando o vídeo para o Clip AI...",
-            "Aguardando o vídeo ficar pronto..."
-        ];
+        youtubeProgressBar.style.width =
+            "2%";
 
-        let indiceEtapaYoutube = 0;
+        const downloadId =
+            window.crypto?.randomUUID?.() ||
+            `youtube-${Date.now()}-${Math.random()}`;
 
         const intervaloYoutube =
             setInterval(
-                () => {
-                    atualizarProcessamento(
-                        "Preparando vídeo do YouTube",
-                        etapasYoutube[
-                            indiceEtapaYoutube %
-                            etapasYoutube.length
-                        ]
-                    );
+                async () => {
+                    try {
+                        const respostaProgresso =
+                            await fetch(
+                                `${API_BASE}/video-link/progresso/${downloadId}`
+                            );
 
-                    indiceEtapaYoutube += 1;
+                        if (!respostaProgresso.ok) {
+                            return;
+                        }
+
+                        const dadosProgresso =
+                            await respostaProgresso.json();
+
+                        const valor =
+                            Math.max(
+                                2,
+                                Math.min(
+                                    100,
+                                    Number(dadosProgresso.progresso) || 2
+                                )
+                            );
+
+                        youtubeProgressBar.style.width =
+                            `${valor}%`;
+
+                        youtubeProgressText.innerText =
+                            dadosProgresso.etapa ||
+                            "Preparando vídeo...";
+
+                    } catch {
+                        // Uma falha momentânea na consulta não interrompe o download.
+                    }
                 },
-                7000
+                2000
             );
 
 
@@ -726,7 +756,9 @@ linkButton?.addEventListener(
                             JSON.stringify({
 
                                 url:
-                                    link
+                                    link,
+
+                                downloadId
 
                             })
 
@@ -877,25 +909,21 @@ linkButton?.addEventListener(
                 intervaloYoutube
             );
 
-            progressBar?.classList.remove(
-                "youtube-loading"
-            );
+            youtubeProgressBar.style.width =
+                "100%";
 
-            atualizarProgresso(
-                100
-            );
+            youtubeProgressTitle.innerText =
+                "Vídeo recebido!";
 
-            atualizarProcessamento(
-                "Vídeo recebido!",
-                "O vídeo está pronto para gerar os cortes."
-            );
+            youtubeProgressText.innerText =
+                "O vídeo está pronto para gerar os cortes.";
 
             await esperar(
                 700
             );
 
             esconder(
-                processingArea
+                youtubeProgressArea
             );
 
 
@@ -931,17 +959,12 @@ linkButton?.addEventListener(
                 intervaloYoutube
             );
 
-            progressBar?.classList.remove(
-                "youtube-loading"
-            );
-
-            atualizarProgresso(
-                0
-            );
-
             esconder(
-                processingArea
+                youtubeProgressArea
             );
+
+            youtubeProgressBar.style.width =
+                "0%";
 
             linkButton.disabled =
                 false;

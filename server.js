@@ -87,6 +87,32 @@ const upload = multer({
 // ======================================================
 
 const trabalhos = new Map();
+const progressoLinks = new Map();
+
+function atualizarProgressoLink(
+    downloadId,
+    progresso,
+    etapa,
+    erro = null
+) {
+    if (!downloadId) {
+        return;
+    }
+
+    progressoLinks.set(
+        downloadId,
+        {
+            progresso:
+                Math.max(
+                    0,
+                    Math.min(100, Number(progresso) || 0)
+                ),
+            etapa,
+            erro,
+            atualizadoEm: Date.now()
+        }
+    );
+}
 
 function criarTrabalho(jobId) {
     if (!jobId) {
@@ -460,10 +486,16 @@ function executarYtDlp(
 
 async function baixarYoutube(
     url,
-    pastaDestino
+    pastaDestino,
+    informarProgresso = () => {}
 ) {
     // No computador local, continua usando o yt-dlp diretamente.
     if (!YOUTUBE_BRIDGE_URL) {
+        informarProgresso(
+            10,
+            "Baixando vídeo do YouTube..."
+        );
+
         return executarYtDlp(
             url,
             pastaDestino
@@ -475,6 +507,11 @@ async function baixarYoutube(
     console.log("YOUTUBE - PONTE LOCAL");
     console.log("==============================");
     console.log("Iniciando trabalho na ponte...");
+
+    informarProgresso(
+        5,
+        "Conectando com a ponte do YouTube..."
+    );
 
     const headersPonte = {
         "Content-Type":
@@ -533,6 +570,11 @@ async function baixarYoutube(
         `Trabalho criado: ${jobId}`
     );
 
+    informarProgresso(
+        10,
+        "Trabalho iniciado no seu computador."
+    );
+
     const limite =
         Date.now() +
         2 * 60 * 60 * 1000;
@@ -569,6 +611,15 @@ async function baixarYoutube(
             `[Ponte] ${status.etapa || status.status}`
         );
 
+        informarProgresso(
+            Math.min(
+                88,
+                Number(status.progresso) || 10
+            ),
+            status.etapa ||
+                "Preparando vídeo..."
+        );
+
         if (status.status === "erro") {
             throw new Error(
                 status.erro ||
@@ -589,6 +640,11 @@ async function baixarYoutube(
 
     console.log(
         "Vídeo pronto. Iniciando transferência..."
+    );
+
+    informarProgresso(
+        90,
+        "Transferindo o vídeo para o Clip AI..."
     );
 
     const resposta = await fetch(
@@ -630,6 +686,11 @@ async function baixarYoutube(
 
     console.log(
         "Vídeo recebido da ponte com sucesso."
+    );
+
+    informarProgresso(
+        100,
+        "Vídeo recebido com sucesso."
     );
 
     return caminhoVideo;
@@ -694,6 +755,28 @@ function apagarPastaTemporaria(
 // ROTA DO LINK
 // ======================================================
 
+app.get(
+    "/video-link/progresso/:downloadId",
+    (
+        req,
+        res
+    ) => {
+        const dados =
+            progressoLinks.get(
+                req.params.downloadId
+            );
+
+        if (!dados) {
+            return res.json({
+                progresso: 0,
+                etapa: "Aguardando início..."
+            });
+        }
+
+        res.json(dados);
+    }
+);
+
 app.post(
     "/video-link",
     async (
@@ -702,8 +785,15 @@ app.post(
     ) => {
 
         const {
-            url
+            url,
+            downloadId
         } = req.body;
+
+        atualizarProgressoLink(
+            downloadId,
+            2,
+            "Link recebido pelo Clip AI."
+        );
 
         if (!url) {
             return res
@@ -759,7 +849,17 @@ app.post(
                 const caminhoVideo =
                     await baixarYoutube(
                         url,
-                        pastaTemporaria
+                        pastaTemporaria,
+                        (
+                            progresso,
+                            etapa
+                        ) => {
+                            atualizarProgressoLink(
+                                downloadId,
+                                progresso,
+                                etapa
+                            );
+                        }
                     );
 
                 const stats =
@@ -880,6 +980,14 @@ app.post(
                 return;
 
             } catch (erro) {
+                atualizarProgressoLink(
+                    downloadId,
+                    0,
+                    "Falha ao preparar o vídeo.",
+                    erro.message ||
+                        "Erro desconhecido."
+                );
+
                 apagarPastaTemporaria(
                     pastaTemporaria
                 );
