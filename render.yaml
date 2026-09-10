@@ -22,7 +22,7 @@ services:
         value: "1"
 
       - key: YOUTUBE_SESSION_SERVER
-        value: https://clip-ai-yt-session.onrender.com/token
+        value: https://clip-ai-yt-session.onrender.com/
 
       - key: YOUTUBE_SESSION_INNERTUBE_CLIENT
         value: WEB_EMBEDDED
