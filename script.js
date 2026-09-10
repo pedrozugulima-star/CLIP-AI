@@ -666,6 +666,45 @@ linkButton?.addEventListener(
             "Carregando...";
 
 
+        mostrar(
+            processingArea
+        );
+
+        atualizarProcessamento(
+            "Preparando vídeo do YouTube",
+            "Conectando com a ponte de download..."
+        );
+
+        progressBar?.classList.add(
+            "youtube-loading"
+        );
+
+        const etapasYoutube = [
+            "Baixando o vídeo do YouTube...",
+            "Otimização em andamento. Vídeos maiores podem demorar alguns minutos...",
+            "Preparando o vídeo para o Clip AI...",
+            "Aguardando o vídeo ficar pronto..."
+        ];
+
+        let indiceEtapaYoutube = 0;
+
+        const intervaloYoutube =
+            setInterval(
+                () => {
+                    atualizarProcessamento(
+                        "Preparando vídeo do YouTube",
+                        etapasYoutube[
+                            indiceEtapaYoutube %
+                            etapasYoutube.length
+                        ]
+                    );
+
+                    indiceEtapaYoutube += 1;
+                },
+                7000
+            );
+
+
         try {
 
             const resposta =
@@ -834,6 +873,32 @@ linkButton?.addEventListener(
             );
 
 
+            clearInterval(
+                intervaloYoutube
+            );
+
+            progressBar?.classList.remove(
+                "youtube-loading"
+            );
+
+            atualizarProgresso(
+                100
+            );
+
+            atualizarProcessamento(
+                "Vídeo recebido!",
+                "O vídeo está pronto para gerar os cortes."
+            );
+
+            await esperar(
+                700
+            );
+
+            esconder(
+                processingArea
+            );
+
+
             alert(
                 "Vídeo carregado pelo link!"
             );
@@ -861,6 +926,22 @@ linkButton?.addEventListener(
 
 
         } finally {
+
+            clearInterval(
+                intervaloYoutube
+            );
+
+            progressBar?.classList.remove(
+                "youtube-loading"
+            );
+
+            atualizarProgresso(
+                0
+            );
+
+            esconder(
+                processingArea
+            );
 
             linkButton.disabled =
                 false;
