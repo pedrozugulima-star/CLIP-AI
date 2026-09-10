@@ -4,6 +4,8 @@ import multer from "multer";
 import fs from "fs";
 import path from "path";
 import { spawn } from "child_process";
+import { Readable } from "stream";
+import { pipeline } from "stream/promises";
 import { fileURLToPath } from "url";
 import ffmpegStatic from "ffmpeg-static";
 
@@ -17,6 +19,15 @@ const uploadsDir = path.join(__dirname, "uploads");
 const geradosDir = path.join(__dirname, "generated");
 
 const ffmpegCommand = ffmpegStatic || "ffmpeg";
+
+const YOUTUBE_BRIDGE_URL =
+    String(process.env.YOUTUBE_BRIDGE_URL || "")
+        .trim()
+        .replace(/\/$/, "");
+
+const YOUTUBE_BRIDGE_SECRET =
+    process.env.YOUTUBE_BRIDGE_SECRET ||
+    "clip-ai-bridge-temporario";
 
 for (const pasta of [uploadsDir, geradosDir]) {
     if (!fs.existsSync(pasta)) {
@@ -444,6 +455,96 @@ function executarYtDlp(
 }
 
 // ======================================================
+// PONTE LOCAL DO YOUTUBE
+// ======================================================
+
+async function baixarYoutube(
+    url,
+    pastaDestino
+) {
+    // No computador local, continua usando o yt-dlp diretamente.
+    if (!YOUTUBE_BRIDGE_URL) {
+        return executarYtDlp(
+            url,
+            pastaDestino
+        );
+    }
+
+    const endpoint =
+        `${YOUTUBE_BRIDGE_URL}/youtube`;
+
+    console.log("");
+    console.log("==============================");
+    console.log("YOUTUBE - PONTE LOCAL");
+    console.log("==============================");
+    console.log("Solicitando o vídeo à ponte...");
+
+    const resposta = await fetch(
+        endpoint,
+        {
+            method: "POST",
+
+            headers: {
+                "Content-Type":
+                    "application/json",
+
+                "x-bridge-secret":
+                    YOUTUBE_BRIDGE_SECRET
+            },
+
+            body: JSON.stringify({
+                url
+            })
+        }
+    );
+
+    if (!resposta.ok) {
+        let detalhe = "";
+
+        try {
+            const dados = await resposta.json();
+            detalhe = dados.erro || "";
+        } catch {
+            detalhe = await resposta.text();
+        }
+
+        throw new Error(
+            detalhe ||
+            `A ponte respondeu com o código ${resposta.status}.`
+        );
+    }
+
+    if (!resposta.body) {
+        throw new Error(
+            "A ponte respondeu sem enviar o vídeo."
+        );
+    }
+
+    const caminhoVideo =
+        path.join(
+            pastaDestino,
+            "video.mp4"
+        );
+
+    await pipeline(
+        Readable.fromWeb(resposta.body),
+        fs.createWriteStream(caminhoVideo)
+    );
+
+    if (!fs.existsSync(caminhoVideo)) {
+        throw new Error(
+            "O vídeo não foi criado após o download pela ponte."
+        );
+    }
+
+    console.log(
+        "Vídeo recebido da ponte com sucesso."
+    );
+
+    return caminhoVideo;
+}
+
+// ======================================================
 // CONTENT TYPE
 // ======================================================
 
@@ -565,7 +666,7 @@ app.post(
                 }
 
                 const caminhoVideo =
-                    await executarYtDlp(
+                    await baixarYoutube(
                         url,
                         pastaTemporaria
                     );

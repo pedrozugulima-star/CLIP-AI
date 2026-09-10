@@ -1,2 +1,3 @@
 groq
 yt-dlp
+bgutil-ytdlp-pot-provider
