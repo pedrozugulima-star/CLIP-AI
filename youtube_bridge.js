@@ -8,6 +8,11 @@ import ffmpegStatic from "ffmpeg-static";
 
 const app = express();
 
+const trabalhosYoutube = new Map();
+
+const TEMPO_MAXIMO_TRABALHO =
+    2 * 60 * 60 * 1000;
+
 const PORT =
     Number(
         process.env.YOUTUBE_BRIDGE_PORT || 3333
@@ -439,6 +444,118 @@ async function comprimirVideo(
 }
 
 // ======================================================
+// TRABALHOS ASSÍNCRONOS
+// ======================================================
+
+function resumoTrabalho(trabalho) {
+    return {
+        ok: true,
+        jobId: trabalho.jobId,
+        status: trabalho.status,
+        etapa: trabalho.etapa,
+        erro: trabalho.erro || null,
+        criadoEm: trabalho.criadoEm,
+        atualizadoEm: trabalho.atualizadoEm
+    };
+}
+
+function atualizarTrabalho(
+    trabalho,
+    status,
+    etapa
+) {
+    trabalho.status = status;
+    trabalho.etapa = etapa;
+    trabalho.atualizadoEm = Date.now();
+}
+
+async function processarTrabalhoYoutube(
+    trabalho,
+    url
+) {
+    try {
+        atualizarTrabalho(
+            trabalho,
+            "processando",
+            "Baixando vídeo do YouTube..."
+        );
+
+        const arquivoOriginal =
+            await baixarYoutube(
+                url,
+                trabalho.pastaTemporaria
+            );
+
+        atualizarTrabalho(
+            trabalho,
+            "processando",
+            "Otimizando vídeo em 720p..."
+        );
+
+        const arquivoOtimizado =
+            await comprimirVideo(
+                arquivoOriginal,
+                trabalho.pastaTemporaria
+            );
+
+        trabalho.arquivo = arquivoOtimizado;
+
+        atualizarTrabalho(
+            trabalho,
+            "pronto",
+            "Vídeo pronto para envio."
+        );
+
+        console.log("");
+        console.log("======================================");
+        console.log("VÍDEO PRONTO PARA O CLIP AI");
+        console.log("======================================");
+        console.log(
+            `Trabalho: ${trabalho.jobId}`
+        );
+
+    } catch (erro) {
+        trabalho.erro =
+            erro.message ||
+            "Erro ao processar o vídeo.";
+
+        atualizarTrabalho(
+            trabalho,
+            "erro",
+            "Falha no processamento."
+        );
+
+        console.error(
+            "Erro no trabalho do YouTube:",
+            erro
+        );
+    }
+}
+
+setInterval(
+    () => {
+        const agora = Date.now();
+
+        for (
+            const [jobId, trabalho]
+            of trabalhosYoutube.entries()
+        ) {
+            if (
+                agora - trabalho.atualizadoEm >
+                TEMPO_MAXIMO_TRABALHO
+            ) {
+                removerPasta(
+                    trabalho.pastaTemporaria
+                );
+
+                trabalhosYoutube.delete(jobId);
+            }
+        }
+    },
+    10 * 60 * 1000
+).unref();
+
+// ======================================================
 // AUTENTICAÇÃO DA PONTE
 // ======================================================
 
@@ -525,6 +642,149 @@ app.get(
 // ======================================================
 // DOWNLOAD
 // ======================================================
+
+app.post(
+    "/youtube/start",
+    autenticar,
+    (
+        req,
+        res
+    ) => {
+        const url =
+            String(
+                req.body?.url || ""
+            ).trim();
+
+        if (!url) {
+            return res.status(400).json({
+                ok: false,
+                erro: "Informe a URL do YouTube."
+            });
+        }
+
+        if (!ehUrlYoutube(url)) {
+            return res.status(400).json({
+                ok: false,
+                erro: "A URL informada não é do YouTube."
+            });
+        }
+
+        const jobId = crypto.randomUUID();
+        const agora = Date.now();
+
+        const trabalho = {
+            jobId,
+            status: "aguardando",
+            etapa: "Trabalho recebido.",
+            erro: null,
+            arquivo: null,
+            pastaTemporaria:
+                criarPastaTemporaria(),
+            criadoEm: agora,
+            atualizadoEm: agora
+        };
+
+        trabalhosYoutube.set(
+            jobId,
+            trabalho
+        );
+
+        res.status(202).json(
+            resumoTrabalho(trabalho)
+        );
+
+        processarTrabalhoYoutube(
+            trabalho,
+            url
+        );
+    }
+);
+
+app.get(
+    "/youtube/status/:jobId",
+    autenticar,
+    (
+        req,
+        res
+    ) => {
+        const trabalho =
+            trabalhosYoutube.get(
+                req.params.jobId
+            );
+
+        if (!trabalho) {
+            return res.status(404).json({
+                ok: false,
+                erro: "Trabalho não encontrado ou expirado."
+            });
+        }
+
+        res.json(
+            resumoTrabalho(trabalho)
+        );
+    }
+);
+
+app.get(
+    "/youtube/download/:jobId",
+    autenticar,
+    (
+        req,
+        res
+    ) => {
+        const trabalho =
+            trabalhosYoutube.get(
+                req.params.jobId
+            );
+
+        if (!trabalho) {
+            return res.status(404).json({
+                ok: false,
+                erro: "Trabalho não encontrado ou expirado."
+            });
+        }
+
+        if (
+            trabalho.status !== "pronto" ||
+            !trabalho.arquivo ||
+            !fs.existsSync(trabalho.arquivo)
+        ) {
+            return res.status(409).json({
+                ok: false,
+                status: trabalho.status,
+                erro:
+                    trabalho.erro ||
+                    "O vídeo ainda não está pronto."
+            });
+        }
+
+        res.download(
+            trabalho.arquivo,
+            "youtube.mp4",
+            erro => {
+                if (erro) {
+                    console.log(
+                        "Erro ao enviar vídeo:",
+                        erro.message
+                    );
+                    return;
+                }
+
+                console.log(
+                    "Vídeo enviado com sucesso."
+                );
+
+                removerPasta(
+                    trabalho.pastaTemporaria
+                );
+
+                trabalhosYoutube.delete(
+                    trabalho.jobId
+                );
+            }
+        );
+    }
+);
 
 app.post(
     "/youtube",

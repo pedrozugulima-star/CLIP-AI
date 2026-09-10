@@ -470,37 +470,34 @@ async function baixarYoutube(
         );
     }
 
-    const endpoint =
-        `${YOUTUBE_BRIDGE_URL}/youtube`;
-
     console.log("");
     console.log("==============================");
     console.log("YOUTUBE - PONTE LOCAL");
     console.log("==============================");
-    console.log("Solicitando o vídeo à ponte...");
+    console.log("Iniciando trabalho na ponte...");
 
-    const resposta = await fetch(
-        endpoint,
+    const headersPonte = {
+        "Content-Type":
+            "application/json",
+
+        "x-bridge-secret":
+            YOUTUBE_BRIDGE_SECRET
+    };
+
+    const respostaInicio = await fetch(
+        `${YOUTUBE_BRIDGE_URL}/youtube/start`,
         {
             method: "POST",
-
-            headers: {
-                "Content-Type":
-                    "application/json",
-
-                "x-bridge-secret":
-                    YOUTUBE_BRIDGE_SECRET
-            },
-
+            headers: headersPonte,
             body: JSON.stringify({
                 url
             })
         }
     );
 
-    if (!resposta.ok) {
+    if (!respostaInicio.ok) {
         const corpoErro =
-            await resposta.text();
+            await respostaInicio.text();
 
         let detalhe = corpoErro;
 
@@ -517,13 +514,100 @@ async function baixarYoutube(
 
         throw new Error(
             detalhe ||
-            `A ponte respondeu com o código ${resposta.status}.`
+            `A ponte respondeu com o código ${respostaInicio.status}.`
         );
     }
 
-    if (!resposta.body) {
+    const inicio =
+        await respostaInicio.json();
+
+    const jobId = inicio.jobId;
+
+    if (!jobId) {
         throw new Error(
-            "A ponte respondeu sem enviar o vídeo."
+            "A ponte não informou o número do trabalho."
+        );
+    }
+
+    console.log(
+        `Trabalho criado: ${jobId}`
+    );
+
+    const limite =
+        Date.now() +
+        2 * 60 * 60 * 1000;
+
+    while (Date.now() < limite) {
+        await new Promise(
+            resolve => setTimeout(resolve, 5000)
+        );
+
+        const respostaStatus = await fetch(
+            `${YOUTUBE_BRIDGE_URL}/youtube/status/${jobId}`,
+            {
+                headers: {
+                    "x-bridge-secret":
+                        YOUTUBE_BRIDGE_SECRET
+                }
+            }
+        );
+
+        if (!respostaStatus.ok) {
+            const detalhe =
+                await respostaStatus.text();
+
+            throw new Error(
+                detalhe ||
+                "Não foi possível consultar a ponte."
+            );
+        }
+
+        const status =
+            await respostaStatus.json();
+
+        console.log(
+            `[Ponte] ${status.etapa || status.status}`
+        );
+
+        if (status.status === "erro") {
+            throw new Error(
+                status.erro ||
+                "A ponte não conseguiu preparar o vídeo."
+            );
+        }
+
+        if (status.status === "pronto") {
+            break;
+        }
+    }
+
+    if (Date.now() >= limite) {
+        throw new Error(
+            "A ponte excedeu o limite de duas horas."
+        );
+    }
+
+    console.log(
+        "Vídeo pronto. Iniciando transferência..."
+    );
+
+    const resposta = await fetch(
+        `${YOUTUBE_BRIDGE_URL}/youtube/download/${jobId}`,
+        {
+            headers: {
+                "x-bridge-secret":
+                    YOUTUBE_BRIDGE_SECRET
+            }
+        }
+    );
+
+    if (!resposta.ok || !resposta.body) {
+        const detalhe =
+            await resposta.text();
+
+        throw new Error(
+            detalhe ||
+            "A ponte não conseguiu enviar o vídeo pronto."
         );
     }
 
