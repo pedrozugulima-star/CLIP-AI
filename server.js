@@ -499,13 +499,20 @@ async function baixarYoutube(
     );
 
     if (!resposta.ok) {
-        let detalhe = "";
+        const corpoErro =
+            await resposta.text();
+
+        let detalhe = corpoErro;
 
         try {
-            const dados = await resposta.json();
-            detalhe = dados.erro || "";
+            const dados =
+                JSON.parse(corpoErro);
+
+            detalhe =
+                dados.erro ||
+                corpoErro;
         } catch {
-            detalhe = await resposta.text();
+            // A ponte pode devolver texto ou HTML em falhas externas.
         }
 
         throw new Error(
