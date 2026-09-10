@@ -66,7 +66,8 @@ const upload = multer({
     storage,
 
     limits: {
-        fileSize: 1024 * 1024 * 1024
+        fileSize: 1024 * 1024 * 1024,
+        fieldSize: 20 * 1024 * 1024
     }
 });
 
@@ -297,7 +298,7 @@ function executarYtDlp(
                 "node",
 
                 "--extractor-args",
-                "youtube:player_client=mweb",
+               "youtube:player_client=web,android_vr,tv_downgraded",
 
                 "--ffmpeg-location",
                 ffmpegCommand,
