@@ -129,7 +129,8 @@ function apagarVideoTemporario(
 function registrarVideoTemporario(
     caminhoOriginal,
     nomeOriginal,
-    contentType
+    contentType,
+    bridgeJobId = null
 ) {
     const token =
         randomUUID();
@@ -171,6 +172,7 @@ function registrarVideoTemporario(
         contentType:
             contentType ||
             "video/mp4",
+        bridgeJobId,
         tamanho:
             fs.statSync(
                 caminho
@@ -628,10 +630,14 @@ async function baixarYoutube(
             "Baixando vídeo do YouTube..."
         );
 
-        return executarYtDlp(
-            url,
-            pastaDestino
-        );
+        return {
+            caminhoVideo:
+                await executarYtDlp(
+                    url,
+                    pastaDestino
+                ),
+            bridgeJobId: null
+        };
     }
 
     console.log("");
@@ -825,7 +831,10 @@ async function baixarYoutube(
         "Vídeo recebido com sucesso."
     );
 
-    return caminhoVideo;
+    return {
+        caminhoVideo,
+        bridgeJobId: jobId
+    };
 }
 
 // ======================================================
@@ -1093,7 +1102,7 @@ app.post(
                     );
                 }
 
-                const caminhoVideo =
+                const resultadoDownload =
                     await baixarYoutube(
                         url,
                         pastaTemporaria,
@@ -1108,6 +1117,9 @@ app.post(
                             );
                         }
                     );
+
+                const caminhoVideo =
+                    resultadoDownload.caminhoVideo;
 
                 const stats =
                     fs.statSync(
@@ -1143,7 +1155,8 @@ app.post(
                     registrarVideoTemporario(
                         caminhoVideo,
                         `youtube-video${extensao}`,
-                        contentType
+                        contentType,
+                        resultadoDownload.bridgeJobId
                     );
 
                 apagarPastaTemporaria(
@@ -3217,6 +3230,234 @@ function apagarPastaDepois(
     );
 }
 
+async function gerarClipesNaPonte(
+    videoTemporario,
+    cortes,
+    segmentos,
+    pastaTrabalho,
+    jobId,
+    pastaNome
+) {
+    const headers = {
+        "Content-Type":
+            "application/json",
+        "x-bridge-secret":
+            YOUTUBE_BRIDGE_SECRET
+    };
+
+    const cortesPonte =
+        cortes.map(
+            corte => ({
+                start:
+                    Number(
+                        corte.start ??
+                        corte.inicio
+                    ),
+                end:
+                    Number(
+                        corte.end ??
+                        corte.fim
+                    ),
+                ass:
+                    criarASSDoCorte(
+                        corte,
+                        segmentos
+                    )
+            })
+        );
+
+    atualizarTrabalho(
+        jobId,
+        5,
+        "Enviando os tempos dos cortes para o seu computador..."
+    );
+
+    const respostaInicio =
+        await fetch(
+            `${YOUTUBE_BRIDGE_URL}/clips/start/${videoTemporario.bridgeJobId}`,
+            {
+                method: "POST",
+                headers,
+                body:
+                    JSON.stringify({
+                        cortes:
+                            cortesPonte
+                    })
+            }
+        );
+
+    if (!respostaInicio.ok) {
+        const detalhe =
+            await respostaInicio.text();
+
+        throw new Error(
+            detalhe ||
+            "A ponte não iniciou a geração local dos clipes."
+        );
+    }
+
+    const limite =
+        Date.now() +
+        2 * 60 * 60 * 1000;
+
+    let statusFinal = null;
+
+    while (Date.now() < limite) {
+        await new Promise(
+            resolve =>
+                setTimeout(
+                    resolve,
+                    2500
+                )
+        );
+
+        const respostaStatus =
+            await fetch(
+                `${YOUTUBE_BRIDGE_URL}/clips/status/${videoTemporario.bridgeJobId}`,
+                {
+                    headers: {
+                        "x-bridge-secret":
+                            YOUTUBE_BRIDGE_SECRET
+                    }
+                }
+            );
+
+        if (!respostaStatus.ok) {
+            throw new Error(
+                "Não foi possível consultar a geração local dos clipes."
+            );
+        }
+
+        statusFinal =
+            await respostaStatus.json();
+
+        const progresso =
+            Math.max(
+                5,
+                Math.min(
+                    95,
+                    Number(
+                        statusFinal.progresso
+                    ) || 5
+                )
+            );
+
+        atualizarTrabalho(
+            jobId,
+            progresso,
+            statusFinal.etapa ||
+                "Gerando clipes no seu computador..."
+        );
+
+        if (
+            statusFinal.status ===
+            "erro"
+        ) {
+            throw new Error(
+                statusFinal.erro ||
+                "Erro na geração local dos clipes."
+            );
+        }
+
+        if (
+            statusFinal.status ===
+            "pronto"
+        ) {
+            break;
+        }
+    }
+
+    if (
+        !statusFinal ||
+        statusFinal.status !== "pronto"
+    ) {
+        throw new Error(
+            "A geração local excedeu o limite de duas horas."
+        );
+    }
+
+    const resultado = [];
+
+    for (
+        let i = 0;
+        i < cortes.length;
+        i++
+    ) {
+        atualizarTrabalho(
+            jobId,
+            96 +
+                Math.round(
+                    ((i + 1) / cortes.length) * 3
+                ),
+            `Recebendo clipe ${i + 1} de ${cortes.length}...`
+        );
+
+        const respostaClipe =
+            await fetch(
+                `${YOUTUBE_BRIDGE_URL}/clips/download/${videoTemporario.bridgeJobId}/${i}`,
+                {
+                    headers: {
+                        "x-bridge-secret":
+                            YOUTUBE_BRIDGE_SECRET
+                    }
+                }
+            );
+
+        if (
+            !respostaClipe.ok ||
+            !respostaClipe.body
+        ) {
+            throw new Error(
+                `Não foi possível receber o clipe ${i + 1}.`
+            );
+        }
+
+        const nomeSaida =
+            `clip-${i + 1}.mp4`;
+
+        const caminhoSaida =
+            path.join(
+                pastaTrabalho,
+                nomeSaida
+            );
+
+        await pipeline(
+            Readable.fromWeb(
+                respostaClipe.body
+            ),
+            fs.createWriteStream(
+                caminhoSaida
+            )
+        );
+
+        const corte = cortes[i];
+
+        resultado.push({
+            ...corte,
+            start:
+                Number(
+                    corte.start ??
+                    corte.inicio
+                ),
+            end:
+                Number(
+                    corte.end ??
+                    corte.fim
+                ),
+            arquivo:
+                nomeSaida,
+            url:
+                `/generated/${encodeURIComponent(
+                    pastaNome
+                )}/${encodeURIComponent(
+                    nomeSaida
+                )}`
+        });
+    }
+
+    return resultado;
+}
+
 // ======================================================
 // GERAR CLIPES
 // ======================================================
@@ -3314,6 +3555,42 @@ app.post(
                     recursive: true
                 }
             );
+
+            if (
+                videoTemporario?.bridgeJobId &&
+                YOUTUBE_BRIDGE_URL
+            ) {
+                const resultado =
+                    await gerarClipesNaPonte(
+                        videoTemporario,
+                        cortes,
+                        segmentos,
+                        pastaTrabalho,
+                        jobId,
+                        pastaNome
+                    );
+
+                atualizarTrabalho(
+                    jobId,
+                    100,
+                    "Clipes gerados no seu computador."
+                );
+
+                limparTrabalhoDepois(jobId);
+                apagarPastaDepois(
+                    pastaTrabalho,
+                    60
+                );
+                apagarVideoTemporario(
+                    videoTemporario.token
+                );
+
+                return res.json({
+                    sucesso: true,
+                    jobId,
+                    cortes: resultado
+                });
+            }
 
             const extensao =
                 path.extname(

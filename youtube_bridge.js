@@ -33,7 +33,7 @@ const COOKIES_FILE =
 
 app.use(
     express.json({
-        limit: "1mb"
+        limit: "20mb"
     })
 );
 
@@ -128,7 +128,8 @@ function removerPasta(pasta) {
 function executarProcesso(
     comando,
     argumentos,
-    nome
+    nome,
+    cwd = undefined
 ) {
 
     return new Promise(
@@ -142,6 +143,7 @@ function executarProcesso(
                     comando,
                     argumentos,
                     {
+                        cwd,
                         env: {
                             ...process.env,
                             PYTHONIOENCODING: "utf-8"
@@ -778,13 +780,398 @@ app.get(
                     "Vídeo enviado com sucesso."
                 );
 
-                removerPasta(
-                    trabalho.pastaTemporaria
+                // Mantém o original disponível para gerar os clipes
+                // localmente depois que o Render escolher os cortes.
+                trabalho.atualizadoEm =
+                    Date.now();
+            }
+        );
+    }
+);
+
+// ======================================================
+// GERAÇÃO LOCAL DOS CLIPES
+// ======================================================
+
+async function processarClipesLocais(
+    trabalho,
+    cortes
+) {
+    try {
+        trabalho.clipsStatus =
+            "processando";
+        trabalho.clipsEtapa =
+            "Preparando geração local...";
+        trabalho.clipsProgresso = 3;
+        trabalho.clipsErro = null;
+        trabalho.clips = [];
+        trabalho.clipsBaixados =
+            new Set();
+        trabalho.atualizadoEm =
+            Date.now();
+
+        const caminhoMarca =
+            path.join(
+                process.cwd(),
+                "favicon.png"
+            );
+
+        const temMarca =
+            fs.existsSync(
+                caminhoMarca
+            );
+
+        const nomeEntrada =
+            path.basename(
+                trabalho.arquivo
+            );
+
+        for (
+            let i = 0;
+            i < cortes.length;
+            i++
+        ) {
+            const corte = cortes[i];
+            const inicio =
+                Number(corte.start);
+            const fim =
+                Number(corte.end);
+
+            if (
+                !Number.isFinite(inicio) ||
+                !Number.isFinite(fim) ||
+                fim <= inicio
+            ) {
+                throw new Error(
+                    `O corte ${i + 1} possui tempo inválido.`
+                );
+            }
+
+            const nomeLegenda =
+                `legenda-${i + 1}.ass`;
+            const nomeSaida =
+                `clip-${i + 1}.mp4`;
+
+            fs.writeFileSync(
+                path.join(
+                    trabalho.pastaTemporaria,
+                    nomeLegenda
+                ),
+                String(corte.ass || ""),
+                "utf8"
+            );
+
+            trabalho.clipsEtapa =
+                `Gerando clipe ${i + 1} de ${cortes.length} no seu computador...`;
+            trabalho.clipsProgresso =
+                5 +
+                Math.round(
+                    (i / cortes.length) * 90
+                );
+            trabalho.atualizadoEm =
+                Date.now();
+
+            console.log("");
+            console.log(
+                trabalho.clipsEtapa
+            );
+
+            const filtro =
+                "[0:v]" +
+                "scale=540:720:force_original_aspect_ratio=increase," +
+                "crop=540:720," +
+                "pad=540:960:0:120:color=black[quadro];" +
+                (
+                    temMarca
+                        ?
+                        "[1:v]scale=72:-1,format=rgba," +
+                        "colorchannelmixer=aa=0.65[marca];" +
+                        "[quadro][marca]" +
+                        "overlay=W-w-18:18,fps=30"
+                        :
+                        "[quadro]fps=30"
+                ) +
+                (
+                    String(corte.ass || "").trim()
+                        ? `,subtitles=${nomeLegenda}`
+                        : ""
+                ) +
+                ",format=yuv420p[video_final]";
+
+            await executarProcesso(
+                ffmpegCommand,
+                [
+                    "-y",
+                    "-ss",
+                    String(inicio),
+                    "-i",
+                    nomeEntrada,
+                    ...(
+                        temMarca
+                            ? [
+                                "-loop",
+                                "1",
+                                "-i",
+                                caminhoMarca
+                            ]
+                            : []
+                    ),
+                    "-t",
+                    String(fim - inicio),
+                    "-filter_complex",
+                    filtro,
+                    "-map",
+                    "[video_final]",
+                    "-map",
+                    "0:a?",
+                    "-c:v",
+                    "libx264",
+                    "-preset",
+                    "superfast",
+                    "-crf",
+                    "23",
+                    "-c:a",
+                    "aac",
+                    "-b:a",
+                    "128k",
+                    "-movflags",
+                    "+faststart",
+                    nomeSaida
+                ],
+                "ffmpeg-clipe",
+                trabalho.pastaTemporaria
+            );
+
+            const caminhoSaida =
+                path.join(
+                    trabalho.pastaTemporaria,
+                    nomeSaida
                 );
 
-                trabalhosYoutube.delete(
-                    trabalho.jobId
+            if (
+                !fs.existsSync(
+                    caminhoSaida
+                )
+            ) {
+                throw new Error(
+                    `O clipe ${i + 1} não foi criado.`
                 );
+            }
+
+            trabalho.clips.push({
+                index: i,
+                nome: nomeSaida,
+                caminho: caminhoSaida
+            });
+
+            trabalho.clipsProgresso =
+                5 +
+                Math.round(
+                    ((i + 1) / cortes.length) * 90
+                );
+            trabalho.atualizadoEm =
+                Date.now();
+        }
+
+        trabalho.clipsStatus =
+            "pronto";
+        trabalho.clipsEtapa =
+            "Todos os clipes foram gerados no seu computador.";
+        trabalho.clipsProgresso = 100;
+        trabalho.atualizadoEm =
+            Date.now();
+
+    } catch (erro) {
+        trabalho.clipsStatus =
+            "erro";
+        trabalho.clipsErro =
+            erro.message ||
+            "Erro ao gerar clipes localmente.";
+        trabalho.clipsEtapa =
+            "Falha na geração local dos clipes.";
+        trabalho.atualizadoEm =
+            Date.now();
+
+        console.error(
+            "Erro ao gerar clipes na ponte:",
+            erro
+        );
+    }
+}
+
+app.post(
+    "/clips/start/:jobId",
+    autenticar,
+    (
+        req,
+        res
+    ) => {
+        const trabalho =
+            trabalhosYoutube.get(
+                req.params.jobId
+            );
+
+        if (
+            !trabalho ||
+            !trabalho.arquivo ||
+            !fs.existsSync(
+                trabalho.arquivo
+            )
+        ) {
+            return res.status(404).json({
+                ok: false,
+                erro:
+                    "O vídeo original não está mais disponível na ponte."
+            });
+        }
+
+        const cortes =
+            Array.isArray(req.body?.cortes)
+                ? req.body.cortes
+                : [];
+
+        if (cortes.length === 0) {
+            return res.status(400).json({
+                ok: false,
+                erro:
+                    "Nenhum corte foi informado."
+            });
+        }
+
+        if (
+            trabalho.clipsStatus ===
+            "processando"
+        ) {
+            return res.status(409).json({
+                ok: false,
+                erro:
+                    "Os clipes deste vídeo já estão sendo gerados."
+            });
+        }
+
+        res.status(202).json({
+            ok: true,
+            jobId: trabalho.jobId,
+            status: "processando"
+        });
+
+        processarClipesLocais(
+            trabalho,
+            cortes
+        );
+    }
+);
+
+app.get(
+    "/clips/status/:jobId",
+    autenticar,
+    (
+        req,
+        res
+    ) => {
+        const trabalho =
+            trabalhosYoutube.get(
+                req.params.jobId
+            );
+
+        if (!trabalho) {
+            return res.status(404).json({
+                ok: false,
+                erro:
+                    "Trabalho não encontrado ou expirado."
+            });
+        }
+
+        res.json({
+            ok: true,
+            jobId: trabalho.jobId,
+            status:
+                trabalho.clipsStatus ||
+                "aguardando",
+            etapa:
+                trabalho.clipsEtapa ||
+                "Aguardando geração dos clipes.",
+            progresso:
+                trabalho.clipsProgresso ||
+                0,
+            erro:
+                trabalho.clipsErro ||
+                null,
+            total:
+                trabalho.clips?.length ||
+                0
+        });
+    }
+);
+
+app.get(
+    "/clips/download/:jobId/:index",
+    autenticar,
+    (
+        req,
+        res
+    ) => {
+        const trabalho =
+            trabalhosYoutube.get(
+                req.params.jobId
+            );
+
+        const index =
+            Number.parseInt(
+                req.params.index,
+                10
+            );
+
+        const clipe =
+            trabalho?.clips?.[index];
+
+        if (
+            !trabalho ||
+            trabalho.clipsStatus !== "pronto" ||
+            !clipe ||
+            !fs.existsSync(clipe.caminho)
+        ) {
+            return res.status(404).json({
+                ok: false,
+                erro:
+                    "Clipe não encontrado ou ainda não concluído."
+            });
+        }
+
+        res.download(
+            clipe.caminho,
+            clipe.nome,
+            erro => {
+                if (erro) {
+                    console.log(
+                        "Erro ao enviar clipe:",
+                        erro.message
+                    );
+                    return;
+                }
+
+                trabalho.clipsBaixados.add(
+                    index
+                );
+                trabalho.atualizadoEm =
+                    Date.now();
+
+                if (
+                    trabalho.clipsBaixados.size >=
+                    trabalho.clips.length
+                ) {
+                    setTimeout(
+                        () => {
+                            removerPasta(
+                                trabalho.pastaTemporaria
+                            );
+                            trabalhosYoutube.delete(
+                                trabalho.jobId
+                            );
+                        },
+                        10 * 60 * 1000
+                    );
+                }
             }
         );
     }
