@@ -77,7 +77,8 @@ const upload = multer({
     storage,
 
     limits: {
-        fileSize: 1024 * 1024 * 1024,
+        // Até 2 GB no modo local para aceitar vídeos longos.
+        fileSize: 2 * 1024 * 1024 * 1024,
         fieldSize: 20 * 1024 * 1024
     }
 });
@@ -2543,7 +2544,7 @@ WrapStyle: 2
 
 [V4+ Styles]
 Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
-Style: Legenda,Arial,22,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,2,1,2,35,35,65,1
+Style: Legenda,Arial,30,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,3,1,2,30,30,145,1
 
 [Events]
 Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
@@ -3195,16 +3196,41 @@ app.post(
                     `Gerando clipe ${i + 1} de ${cortes.length} com legenda dinâmica...`
                 );
 
-                const filtroBase =
-                    "scale=540:960:force_original_aspect_ratio=increase," +
-                    "crop=540:960,fps=30";
+                const caminhoMarca =
+                    path.join(
+                        process.cwd(),
+                        "favicon.png"
+                    );
 
+                const temMarca =
+                    fs.existsSync(
+                        caminhoMarca
+                    );
+
+                // Mantém a saída em 9:16, usa um quadro frontal 3:4 com
+                // menos zoom e completa o restante com fundo preto.
+                // Se favicon.png estiver presente, adiciona a marca d'água.
                 const filtroLegenda =
-                    ass.trim()
-                        ?
-                        `${filtroBase},subtitles=${nomeLegenda}`
-                        :
-                        filtroBase;
+                    "[0:v]" +
+                    "scale=540:720:force_original_aspect_ratio=increase," +
+                    "crop=540:720," +
+                    "pad=540:960:0:120:color=black[quadro];" +
+                    (
+                        temMarca
+                            ?
+                            "[1:v]scale=72:-1,format=rgba," +
+                            "colorchannelmixer=aa=0.65[marca];" +
+                            "[quadro][marca]" +
+                            "overlay=W-w-18:18,fps=30"
+                            :
+                            "[quadro]fps=30"
+                    ) +
+                    (
+                        ass.trim()
+                            ? `,subtitles=${nomeLegenda}`
+                            : ""
+                    ) +
+                    ",format=yuv420p[video_final]";
 
                 await executarFFmpeg(
                     [
@@ -3216,26 +3242,43 @@ app.post(
                         "-i",
                         nomeEntrada,
 
+                        ...(
+                            temMarca
+                                ? [
+                                    "-loop",
+                                    "1",
+                                    "-i",
+                                    caminhoMarca
+                                ]
+                                : []
+                        ),
+
                         "-t",
                         String(duracao),
 
-                        "-vf",
+                        "-filter_complex",
                         filtroLegenda,
+
+                        "-map",
+                        "[video_final]",
+
+                        "-map",
+                        "0:a?",
 
                         "-c:v",
                         "libx264",
 
                         "-preset",
-                        "veryfast",
+                        "superfast",
 
                         "-crf",
-                        "25",
+                        "23",
 
                         "-c:a",
                         "aac",
 
                         "-b:a",
-                        "96k",
+                        "128k",
 
                         "-movflags",
                         "+faststart",
@@ -3458,7 +3501,7 @@ app.listen(
         );
 
         console.log(
-            "✓ Legenda tamanho 22"
+            "✓ Legenda tamanho 30"
         );
 
         console.log(
@@ -3478,7 +3521,7 @@ app.listen(
         );
 
         console.log(
-            "✓ Legendas posicionadas mais abaixo"
+            "✓ Legendas posicionadas mais acima"
         );
 
         console.log(
