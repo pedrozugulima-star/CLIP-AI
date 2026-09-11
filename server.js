@@ -7,6 +7,7 @@ import { spawn } from "child_process";
 import { Readable } from "stream";
 import { pipeline } from "stream/promises";
 import { fileURLToPath } from "url";
+import { randomUUID } from "crypto";
 import ffmpegStatic from "ffmpeg-static";
 
 const app = express();
@@ -89,6 +90,136 @@ const upload = multer({
 
 const trabalhos = new Map();
 const progressoLinks = new Map();
+const videosTemporarios = new Map();
+
+function apagarVideoTemporario(
+    token
+) {
+    const registro =
+        videosTemporarios.get(
+            token
+        );
+
+    if (!registro) {
+        return;
+    }
+
+    videosTemporarios.delete(
+        token
+    );
+
+    try {
+        if (
+            fs.existsSync(
+                registro.caminho
+            )
+        ) {
+            fs.unlinkSync(
+                registro.caminho
+            );
+        }
+    } catch (erro) {
+        console.error(
+            "Não foi possível apagar o vídeo temporário:",
+            erro.message
+        );
+    }
+}
+
+function registrarVideoTemporario(
+    caminhoOriginal,
+    nomeOriginal,
+    contentType
+) {
+    const token =
+        randomUUID();
+
+    const extensao =
+        path.extname(
+            nomeOriginal ||
+            caminhoOriginal
+        ) || ".mp4";
+
+    const caminho =
+        path.join(
+            uploadsDir,
+            `fonte-${token}${extensao}`
+        );
+
+    try {
+        fs.renameSync(
+            caminhoOriginal,
+            caminho
+        );
+    } catch {
+        fs.copyFileSync(
+            caminhoOriginal,
+            caminho
+        );
+
+        fs.unlinkSync(
+            caminhoOriginal
+        );
+    }
+
+    const registro = {
+        token,
+        caminho,
+        nome:
+            nomeOriginal ||
+            `video${extensao}`,
+        contentType:
+            contentType ||
+            "video/mp4",
+        tamanho:
+            fs.statSync(
+                caminho
+            ).size
+    };
+
+    videosTemporarios.set(
+        token,
+        registro
+    );
+
+    // Segurança: remove fontes abandonadas depois de três horas.
+    setTimeout(
+        () =>
+            apagarVideoTemporario(
+                token
+            ),
+        3 * 60 * 60 * 1000
+    );
+
+    return registro;
+}
+
+function obterVideoTemporario(
+    token
+) {
+    if (
+        !token ||
+        typeof token !== "string"
+    ) {
+        return null;
+    }
+
+    const registro =
+        videosTemporarios.get(
+            token
+        );
+
+    if (
+        !registro ||
+        !fs.existsSync(
+            registro.caminho
+        )
+    ) {
+        return null;
+    }
+
+    return registro;
+}
 
 function atualizarProgressoLink(
     downloadId,
@@ -757,6 +888,121 @@ function apagarPastaTemporaria(
 // ======================================================
 
 app.get(
+    "/video-temporario/:token",
+    (
+        req,
+        res
+    ) => {
+        const registro =
+            obterVideoTemporario(
+                req.params.token
+            );
+
+        if (!registro) {
+            return res
+                .status(404)
+                .json({
+                    sucesso: false,
+                    erro:
+                        "O vídeo temporário não está mais disponível."
+                });
+        }
+
+        const tamanho =
+            registro.tamanho;
+
+        const range =
+            req.headers.range;
+
+        res.setHeader(
+            "Accept-Ranges",
+            "bytes"
+        );
+
+        res.setHeader(
+            "Cache-Control",
+            "no-store"
+        );
+
+        res.setHeader(
+            "Content-Type",
+            registro.contentType
+        );
+
+        if (!range) {
+            res.setHeader(
+                "Content-Length",
+                tamanho
+            );
+
+            fs.createReadStream(
+                registro.caminho
+            ).pipe(res);
+
+            return;
+        }
+
+        const partes =
+            range.replace(
+                /bytes=/,
+                ""
+            ).split("-");
+
+        const inicio =
+            Number.parseInt(
+                partes[0],
+                10
+            ) || 0;
+
+        const fimSolicitado =
+            partes[1]
+                ? Number.parseInt(
+                    partes[1],
+                    10
+                )
+                : inicio +
+                    1024 * 1024 - 1;
+
+        const fim =
+            Math.min(
+                fimSolicitado,
+                tamanho - 1
+            );
+
+        if (
+            inicio < 0 ||
+            inicio >= tamanho ||
+            fim < inicio
+        ) {
+            res.status(416);
+            res.setHeader(
+                "Content-Range",
+                `bytes */${tamanho}`
+            );
+            return res.end();
+        }
+
+        res.status(206);
+        res.setHeader(
+            "Content-Range",
+            `bytes ${inicio}-${fim}/${tamanho}`
+        );
+        res.setHeader(
+            "Content-Length",
+            fim - inicio + 1
+        );
+
+        fs.createReadStream(
+            registro.caminho,
+            {
+                start: inicio,
+                end: fim
+            }
+        ).pipe(res);
+    }
+);
+
+app.get(
     "/video-link/progresso/:downloadId",
     (
         req,
@@ -893,92 +1139,43 @@ app.post(
                     "MB"
                 );
 
-                res.setHeader(
-                    "Content-Type",
-                    contentType
-                );
-
-                res.setHeader(
-                    "Content-Length",
-                    stats.size
-                );
-
-                res.setHeader(
-                    "Content-Disposition",
-                    `inline; filename="youtube-video${extensao}"`
-                );
-
-                res.setHeader(
-                    "Cache-Control",
-                    "no-store"
-                );
-
-                let limpezaFeita =
-                    false;
-
-                const limpar =
-                    () => {
-                        if (limpezaFeita) {
-                            return;
-                        }
-
-                        limpezaFeita = true;
-
-                        apagarPastaTemporaria(
-                            pastaTemporaria
-                        );
-
-                        console.log(
-                            "Vídeo temporário do YouTube apagado."
-                        );
-                    };
-
-                res.on(
-                    "finish",
-                    limpar
-                );
-
-                res.on(
-                    "close",
-                    limpar
-                );
-
-                const stream =
-                    fs.createReadStream(
-                        caminhoVideo
+                const registro =
+                    registrarVideoTemporario(
+                        caminhoVideo,
+                        `youtube-video${extensao}`,
+                        contentType
                     );
 
-                stream.on(
-                    "error",
-                    erro => {
-                        console.error(
-                            "Erro ao enviar vídeo do YouTube:",
-                            erro
-                        );
-
-                        limpar();
-
-                        if (
-                            !res.headersSent
-                        ) {
-                            res
-                                .status(500)
-                                .json({
-                                    sucesso: false,
-
-                                    erro:
-                                        "O vídeo foi baixado, mas não pôde ser enviado ao navegador."
-                                });
-
-                        } else {
-                            res.destroy(erro);
-                        }
-                    }
+                apagarPastaTemporaria(
+                    pastaTemporaria
                 );
 
-                stream.pipe(res);
+                atualizarProgressoLink(
+                    downloadId,
+                    100,
+                    "Vídeo pronto para análise."
+                );
 
-                return;
+                console.log(
+                    "Vídeo guardado no servidor para análise e geração sem reenvio."
+                );
+
+                return res.json({
+                    sucesso: true,
+                    tipo: "youtube",
+                    videoToken:
+                        registro.token,
+                    nome:
+                        registro.nome,
+                    tamanho:
+                        registro.tamanho,
+                    contentType:
+                        registro.contentType,
+                    previewUrl:
+                        `/video-temporario/${encodeURIComponent(
+                            registro.token
+                        )}`
+                });
 
             } catch (erro) {
                 atualizarProgressoLink(
@@ -1828,9 +2025,17 @@ app.post(
             req.body?.jobId ||
             null;
 
+        const videoTemporario =
+            obterVideoTemporario(
+                req.body?.videoToken
+            );
+
         criarTrabalho(jobId);
 
-        if (!req.file) {
+        if (
+            !req.file &&
+            !videoTemporario
+        ) {
             marcarErro(
                 jobId,
                 "Nenhum vídeo foi enviado."
@@ -1851,7 +2056,8 @@ app.post(
         }
 
         const caminhoVideo =
-            req.file.path;
+            req.file?.path ||
+            videoTemporario.caminho;
 
         let timerProgresso =
             null;
@@ -1863,7 +2069,8 @@ app.post(
             console.log("===========================");
             console.log(
                 "Arquivo:",
-                req.file.originalname
+                req.file?.originalname ||
+                videoTemporario.nome
             );
 
             atualizarTrabalho(
@@ -2027,12 +2234,13 @@ app.post(
         } finally {
             try {
                 if (
+                    req.file?.path &&
                     fs.existsSync(
-                        caminhoVideo
+                        req.file.path
                     )
                 ) {
                     fs.unlinkSync(
-                        caminhoVideo
+                        req.file.path
                     );
                 }
 
@@ -3027,9 +3235,17 @@ app.post(
             req.body?.jobId ||
             `job-${Date.now()}`;
 
+        const videoTemporario =
+            obterVideoTemporario(
+                req.body?.videoToken
+            );
+
         criarTrabalho(jobId);
 
-        if (!req.file) {
+        if (
+            !req.file &&
+            !videoTemporario
+        ) {
             marcarErro(
                 jobId,
                 "Nenhum vídeo foi enviado para geração."
@@ -3101,7 +3317,8 @@ app.post(
 
             const extensao =
                 path.extname(
-                    req.file.originalname
+                    req.file?.originalname ||
+                    videoTemporario.nome
                 ) ||
                 ".mp4";
 
@@ -3114,10 +3331,17 @@ app.post(
                     nomeEntrada
                 );
 
-            fs.copyFileSync(
-                req.file.path,
-                caminhoEntrada
-            );
+            const entradaFFmpeg =
+                videoTemporario
+                    ? videoTemporario.caminho
+                    : caminhoEntrada;
+
+            if (req.file) {
+                fs.copyFileSync(
+                    req.file.path,
+                    caminhoEntrada
+                );
+            }
 
             const resultado = [];
 
@@ -3240,7 +3464,7 @@ app.post(
                         String(inicio),
 
                         "-i",
-                        nomeEntrada,
+                        entradaFFmpeg,
 
                         ...(
                             temMarca
@@ -3341,6 +3565,12 @@ app.post(
                 pastaTrabalho,
                 60
             );
+
+            if (videoTemporario) {
+                apagarVideoTemporario(
+                    videoTemporario.token
+                );
+            }
 
             return res.json({
                 sucesso: true,

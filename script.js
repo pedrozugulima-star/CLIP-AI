@@ -105,6 +105,8 @@ const clipsGrid =
 
 let selectedFile = null;
 
+let selectedVideoToken = null;
+
 let videoURL = null;
 
 let cortes = [];
@@ -482,6 +484,9 @@ function prepararVideo(
     selectedFile =
         file;
 
+    selectedVideoToken =
+        null;
+
     cortes =
         [];
 
@@ -496,7 +501,9 @@ function prepararVideo(
 
 
     if (
-        videoURL
+        videoURL?.startsWith(
+            "blob:"
+        )
     ) {
 
         URL.revokeObjectURL(
@@ -606,6 +613,88 @@ function prepararVideo(
 
     mostrarCortesPendentes();
 
+}
+
+
+function prepararVideoRemoto(
+    dados
+) {
+    selectedFile =
+        null;
+
+    selectedVideoToken =
+        dados.videoToken;
+
+    cortes = [];
+    segmentosIA = [];
+
+    limparResultados();
+    atualizarProgresso(0);
+
+    if (
+        videoURL?.startsWith(
+            "blob:"
+        )
+    ) {
+        URL.revokeObjectURL(
+            videoURL
+        );
+    }
+
+    videoURL =
+        `${API_BASE}${dados.previewUrl}`;
+
+    if (selectedFileName) {
+        selectedFileName.innerText =
+            dados.nome ||
+            "Vídeo do YouTube";
+    }
+
+    if (selectedFileSize) {
+        const mb =
+            Number(dados.tamanho || 0) /
+            1024 /
+            1024;
+
+        selectedFileSize.innerText =
+            `${mb.toFixed(1)} MB`;
+    }
+
+    mostrar(selectedFileBox);
+    mostrar(previewArea);
+    mostrar(manualArea);
+
+    if (videoPreview) {
+        videoPreview.src =
+            videoURL;
+
+        videoPreview.load();
+
+        videoPreview.onloadedmetadata =
+            () => {
+                const duracao =
+                    videoPreview.duration;
+
+                if (startTime) {
+                    startTime.value = 0;
+                }
+
+                if (endTime) {
+                    endTime.value =
+                        Math.min(
+                            30,
+                            duracao
+                        ).toFixed(1);
+                }
+
+                if (generateButton) {
+                    generateButton.disabled =
+                        false;
+                }
+            };
+    }
+
+    mostrarCortesPendentes();
 }
 
 
@@ -815,6 +904,37 @@ linkButton?.addEventListener(
 
                 }
 
+                if (
+                    dados.sucesso &&
+                    dados.videoToken &&
+                    dados.previewUrl
+                ) {
+                    prepararVideoRemoto(
+                        dados
+                    );
+
+                    clearInterval(
+                        intervaloYoutube
+                    );
+
+                    youtubeProgressBar.style.width =
+                        "100%";
+
+                    youtubeProgressTitle.innerText =
+                        "Vídeo pronto!";
+
+                    youtubeProgressText.innerText =
+                        "O vídeo será analisado no servidor sem novo envio.";
+
+                    await esperar(700);
+
+                    alert(
+                        "Vídeo pronto para gerar os clipes!"
+                    );
+
+                    return;
+                }
+
 
                 throw new Error(
 
@@ -987,7 +1107,10 @@ markStartButton?.addEventListener(
     () => {
 
         if (
-            !selectedFile ||
+            (
+                !selectedFile &&
+                !selectedVideoToken
+            ) ||
             !videoPreview
         ) {
 
@@ -1010,7 +1133,10 @@ markEndButton?.addEventListener(
     () => {
 
         if (
-            !selectedFile ||
+            (
+                !selectedFile &&
+                !selectedVideoToken
+            ) ||
             !videoPreview
         ) {
 
@@ -1033,7 +1159,8 @@ addCutButton?.addEventListener(
     () => {
 
         if (
-            !selectedFile
+            !selectedFile &&
+            !selectedVideoToken
         ) {
 
             alert(
@@ -1256,15 +1383,18 @@ async function analisarComIA() {
         new FormData();
 
 
-    formData.append(
-
-        "video",
-
-        selectedFile,
-
-        selectedFile.name
-
-    );
+    if (selectedVideoToken) {
+        formData.append(
+            "videoToken",
+            selectedVideoToken
+        );
+    } else {
+        formData.append(
+            "video",
+            selectedFile,
+            selectedFile.name
+        );
+    }
 
 
     formData.append(
@@ -1532,15 +1662,18 @@ async function gerarClipesNoServidor() {
         new FormData();
 
 
-    formData.append(
-
-        "video",
-
-        selectedFile,
-
-        selectedFile.name
-
-    );
+    if (selectedVideoToken) {
+        formData.append(
+            "videoToken",
+            selectedVideoToken
+        );
+    } else {
+        formData.append(
+            "video",
+            selectedFile,
+            selectedFile.name
+        );
+    }
 
 
     formData.append(
@@ -1658,7 +1791,8 @@ generateButton?.addEventListener(
     async () => {
 
         if (
-            !selectedFile
+            !selectedFile &&
+            !selectedVideoToken
         ) {
 
             alert(
@@ -1927,6 +2061,78 @@ function criarCardClip(
     );
 
 
+    const fullscreenButton =
+        document.createElement(
+            "button"
+        );
+
+    fullscreenButton.type =
+        "button";
+
+    fullscreenButton.className =
+        "clip-fullscreen-button";
+
+    fullscreenButton.innerText =
+        "⛶ Tela cheia";
+
+    let esteClipeEstavaAberto =
+        false;
+
+    fullscreenButton.addEventListener(
+        "click",
+        async () => {
+            try {
+                if (
+                    document.fullscreenElement ===
+                    videoWrapper
+                ) {
+                    await document.exitFullscreen();
+                    return;
+                }
+
+                await videoWrapper.requestFullscreen();
+
+            } catch (erro) {
+                console.error(
+                    "Não foi possível alterar a tela cheia:",
+                    erro
+                );
+            }
+        }
+    );
+
+    document.addEventListener(
+        "fullscreenchange",
+        () => {
+            const aberto =
+                document.fullscreenElement ===
+                videoWrapper;
+
+            fullscreenButton.innerText =
+                aberto
+                    ? "← Voltar aos clipes"
+                    : "⛶ Tela cheia";
+
+            if (
+                !aberto &&
+                esteClipeEstavaAberto
+            ) {
+                card.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center"
+                });
+            }
+
+            esteClipeEstavaAberto =
+                aberto;
+        }
+    );
+
+    videoWrapper.appendChild(
+        fullscreenButton
+    );
+
+
     const content =
         document.createElement(
             "div"
@@ -2024,6 +2230,89 @@ function criarCardClip(
 
     download.innerText =
         "⬇ Baixar clipe";
+
+
+    // O front local roda na porta 5173 e os vídeos na porta 3000.
+    // Nesse download pode ser ignorado entre origens diferentes,
+    // fazendo o navegador abrir o vídeo na mesma tela. Buscar o arquivo
+    // como Blob garante o download sem sair da lista de clipes.
+    download.addEventListener(
+        "click",
+        async evento => {
+            evento.preventDefault();
+
+            const textoOriginal =
+                download.innerText;
+
+            download.innerText =
+                "Preparando download...";
+
+            download.style.pointerEvents =
+                "none";
+
+            try {
+                const resposta =
+                    await fetch(url);
+
+                if (!resposta.ok) {
+                    throw new Error(
+                        `Falha ao baixar o clipe (${resposta.status}).`
+                    );
+                }
+
+                const arquivo =
+                    await resposta.blob();
+
+                const urlTemporaria =
+                    URL.createObjectURL(
+                        arquivo
+                    );
+
+                const linkTemporario =
+                    document.createElement(
+                        "a"
+                    );
+
+                linkTemporario.href =
+                    urlTemporaria;
+
+                linkTemporario.download =
+                    `clip-ai-${index + 1}.mp4`;
+
+                document.body.appendChild(
+                    linkTemporario
+                );
+
+                linkTemporario.click();
+                linkTemporario.remove();
+
+                window.setTimeout(
+                    () =>
+                        URL.revokeObjectURL(
+                            urlTemporaria
+                        ),
+                    1000
+                );
+
+            } catch (erro) {
+                console.error(
+                    "Erro ao baixar o clipe:",
+                    erro
+                );
+
+                alert(
+                    "Não foi possível baixar este clipe. Tente novamente."
+                );
+
+            } finally {
+                download.innerText =
+                    textoOriginal;
+
+                download.style.pointerEvents =
+                    "";
+            }
+        }
+    );
 
 
     content.appendChild(
