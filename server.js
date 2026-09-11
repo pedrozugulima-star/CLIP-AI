@@ -2755,17 +2755,34 @@ function criarBlocosPalavras(
 // CABEÇALHO ASS
 // ======================================================
 
-function cabecalhoASS() {
+function cabecalhoASS(
+    formato = "vertical"
+) {
+    const horizontal =
+        formato === "horizontal";
+
+    const largura =
+        horizontal ? 960 : 540;
+
+    const altura =
+        horizontal ? 540 : 960;
+
+    const tamanhoFonte =
+        horizontal ? 25 : 30;
+
+    const margemVertical =
+        horizontal ? 55 : 145;
+
     return `[Script Info]
 ScriptType: v4.00+
-PlayResX: 540
-PlayResY: 960
+PlayResX: ${largura}
+PlayResY: ${altura}
 ScaledBorderAndShadow: yes
 WrapStyle: 2
 
 [V4+ Styles]
 Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
-Style: Legenda,Arial,30,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,3,1,2,30,30,145,1
+Style: Legenda,Arial,${tamanhoFonte},&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,3,1,2,30,30,${margemVertical},1
 
 [Events]
 Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
@@ -2840,7 +2857,8 @@ function corrigirSobreposicaoEventos(
 
 function criarASSDoCorte(
     corte,
-    segmentos
+    segmentos,
+    formato = "vertical"
 ) {
     const inicioCorte =
         Number(
@@ -2980,7 +2998,7 @@ function criarASSDoCorte(
             );
 
         return (
-            cabecalhoASS() +
+            cabecalhoASS(formato) +
             linhas.join("\n") +
             "\n"
         );
@@ -3141,7 +3159,7 @@ function criarASSDoCorte(
         );
 
     return (
-        cabecalhoASS() +
+        cabecalhoASS(formato) +
         linhas.join("\n") +
         "\n"
     );
@@ -3236,7 +3254,8 @@ async function gerarClipesNaPonte(
     segmentos,
     pastaTrabalho,
     jobId,
-    pastaNome
+    pastaNome,
+    formato
 ) {
     const headers = {
         "Content-Type":
@@ -3261,7 +3280,8 @@ async function gerarClipesNaPonte(
                 ass:
                     criarASSDoCorte(
                         corte,
-                        segmentos
+                        segmentos,
+                        formato
                     )
             })
         );
@@ -3281,7 +3301,8 @@ async function gerarClipesNaPonte(
                 body:
                     JSON.stringify({
                         cortes:
-                            cortesPonte
+                            cortesPonte,
+                        formato
                     })
             }
         );
@@ -3434,6 +3455,7 @@ async function gerarClipesNaPonte(
 
         resultado.push({
             ...corte,
+            formato,
             start:
                 Number(
                     corte.start ??
@@ -3518,6 +3540,11 @@ app.post(
                     "Segmentos de legenda"
                 );
 
+            const formato =
+                req.body?.formato === "horizontal"
+                    ? "horizontal"
+                    : "vertical";
+
             if (
                 cortes.length === 0
             ) {
@@ -3567,7 +3594,8 @@ app.post(
                         segmentos,
                         pastaTrabalho,
                         jobId,
-                        pastaNome
+                        pastaNome,
+                        formato
                     );
 
                 atualizarTrabalho(
@@ -3671,7 +3699,8 @@ app.post(
                 const ass =
                     criarASSDoCorte(
                         corte,
-                        segmentos
+                        segmentos,
+                        formato
                     );
 
                 fs.writeFileSync(
@@ -3708,14 +3737,18 @@ app.post(
                         caminhoMarca
                     );
 
-                // Mantém a saída em 9:16, usa um quadro frontal 3:4 com
-                // menos zoom e completa o restante com fundo preto.
-                // Se favicon.png estiver presente, adiciona a marca d'água.
+                // Vertical: corte moderado, mais aberto que o enquadramento antigo.
+                // Horizontal: preserva e preenche o quadro 16:9.
                 const filtroLegenda =
                     "[0:v]" +
-                    "scale=540:720:force_original_aspect_ratio=increase," +
-                    "crop=540:720," +
-                    "pad=540:960:0:120:color=black[quadro];" +
+                    (
+                        formato === "horizontal"
+                            ? "scale=960:540:force_original_aspect_ratio=decrease," +
+                              "pad=960:540:(ow-iw)/2:(oh-ih)/2:color=black[quadro];"
+                            : "scale=540:600:force_original_aspect_ratio=increase," +
+                              "crop=540:600," +
+                              "pad=540:960:0:180:color=black[quadro];"
+                    ) +
                     (
                         temMarca
                             ?
@@ -3792,6 +3825,8 @@ app.post(
 
                 resultado.push({
                     ...corte,
+
+                    formato,
 
                     start: inicio,
                     end: fim,

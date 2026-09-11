@@ -115,6 +115,66 @@ let segmentosIA = [];
 
 let monitorProgresso = null;
 
+let formatoSaida = "vertical";
+
+
+function criarSeletorFormato() {
+
+    if (
+        !generateButton ||
+        document.getElementById("clipFormatSelector")
+    ) {
+        return;
+    }
+
+    const seletor = document.createElement("div");
+    seletor.id = "clipFormatSelector";
+    seletor.className = "clip-format-selector";
+    seletor.innerHTML = `
+        <div class="clip-format-heading">
+            <strong>Formato dos clipes</strong>
+            <span>Escolha como o vídeo será enquadrado</span>
+        </div>
+        <div class="clip-format-options">
+            <label class="clip-format-option is-selected">
+                <input type="radio" name="clipFormat" value="vertical" checked>
+                <span class="clip-format-icon clip-format-icon-vertical"></span>
+                <span class="clip-format-copy">
+                    <strong>Em pé</strong>
+                    <small>Recomendado para podcasts, entrevistas e pessoas</small>
+                </span>
+                <span class="clip-format-badge">Recomendado</span>
+            </label>
+            <label class="clip-format-option">
+                <input type="radio" name="clipFormat" value="horizontal">
+                <span class="clip-format-icon clip-format-icon-horizontal"></span>
+                <span class="clip-format-copy">
+                    <strong>Deitado</strong>
+                    <small>Recomendado para apresentações, produtos e vídeos sem rostos</small>
+                </span>
+            </label>
+        </div>
+    `;
+
+    generateButton.parentElement?.insertBefore(
+        seletor,
+        generateButton
+    );
+
+    seletor.querySelectorAll('input[name="clipFormat"]')
+        .forEach(input => {
+            input.addEventListener("change", () => {
+                formatoSaida = input.value;
+                seletor.querySelectorAll(".clip-format-option")
+                    .forEach(opcao => opcao.classList.remove("is-selected"));
+                input.closest(".clip-format-option")
+                    ?.classList.add("is-selected");
+            });
+        });
+}
+
+criarSeletorFormato();
+
 
 // ======================================================
 // AUXILIARES
@@ -1402,7 +1462,6 @@ async function analisarComIA() {
         jobId
     );
 
-
     try {
 
         const resposta =
@@ -1679,6 +1738,11 @@ async function gerarClipesNoServidor() {
     formData.append(
         "jobId",
         jobId
+    );
+
+    formData.append(
+        "formato",
+        formatoSaida
     );
 
 
@@ -2028,6 +2092,10 @@ function criarCardClip(
 
     videoWrapper.className =
         "clip-video-wrapper";
+
+    if (corte?.formato === "horizontal") {
+        videoWrapper.classList.add("clip-video-wrapper-horizontal");
+    }
 
 
     const video =

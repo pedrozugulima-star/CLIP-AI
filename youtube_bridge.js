@@ -795,7 +795,8 @@ app.get(
 
 async function processarClipesLocais(
     trabalho,
-    cortes
+    cortes,
+    formato = "vertical"
 ) {
     try {
         trabalho.clipsStatus =
@@ -878,9 +879,14 @@ async function processarClipesLocais(
 
             const filtro =
                 "[0:v]" +
-                "scale=540:720:force_original_aspect_ratio=decrease," +
-                "pad=540:720:(ow-iw)/2:(oh-ih)/2:color=black," +
-                "pad=540:960:0:120:color=black[quadro];" +
+                (
+                    formato === "horizontal"
+                        ? "scale=960:540:force_original_aspect_ratio=decrease," +
+                          "pad=960:540:(ow-iw)/2:(oh-ih)/2:color=black[quadro];"
+                        : "scale=540:600:force_original_aspect_ratio=increase," +
+                          "crop=540:600," +
+                          "pad=540:960:0:180:color=black[quadro];"
+                ) +
                 (
                     temMarca
                         ?
@@ -1030,6 +1036,11 @@ app.post(
                 ? req.body.cortes
                 : [];
 
+        const formato =
+            req.body?.formato === "horizontal"
+                ? "horizontal"
+                : "vertical";
+
         if (cortes.length === 0) {
             return res.status(400).json({
                 ok: false,
@@ -1057,7 +1068,8 @@ app.post(
 
         processarClipesLocais(
             trabalho,
-            cortes
+            cortes,
+            formato
         );
     }
 );
