@@ -878,8 +878,8 @@ async function processarClipesLocais(
 
             const filtro =
                 "[0:v]" +
-                "scale=540:720:force_original_aspect_ratio=increase," +
-                "crop=540:720," +
+                "scale=540:720:force_original_aspect_ratio=decrease," +
+                "pad=540:720:(ow-iw)/2:(oh-ih)/2:color=black," +
                 "pad=540:960:0:120:color=black[quadro];" +
                 (
                     temMarca
