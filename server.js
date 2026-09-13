@@ -3323,6 +3323,10 @@ async function gerarClipesNaPonte(
 
     let statusFinal = null;
 
+    let falhasConsecutivas = 0;
+
+    const maximoFalhasConsecutivas = 48;
+
     while (Date.now() < limite) {
         await new Promise(
             resolve =>
@@ -3332,25 +3336,81 @@ async function gerarClipesNaPonte(
                 )
         );
 
-        const respostaStatus =
-            await fetch(
-                `${YOUTUBE_BRIDGE_URL}/clips/status/${videoTemporario.bridgeJobId}`,
-                {
-                    headers: {
-                        "x-bridge-secret":
-                            YOUTUBE_BRIDGE_SECRET
+        try {
+            const respostaStatus =
+                await fetch(
+                    `${YOUTUBE_BRIDGE_URL}/clips/status/${videoTemporario.bridgeJobId}`,
+                    {
+                        headers: {
+                            "x-bridge-secret":
+                                YOUTUBE_BRIDGE_SECRET
+                        }
                     }
+                );
+
+            if (!respostaStatus.ok) {
+                const detalhe =
+                    await respostaStatus
+                        .text()
+                        .catch(() => "");
+
+                // Erros de autenticação ou trabalho inexistente não são
+                // oscilações temporárias e precisam ser informados logo.
+                if (
+                    respostaStatus.status === 401 ||
+                    respostaStatus.status === 403 ||
+                    respostaStatus.status === 404
+                ) {
+                    const erroDefinitivo = new Error(
+                        detalhe ||
+                        `A ponte respondeu com o código ${respostaStatus.status}.`
+                    );
+
+                    erroDefinitivo.erroDefinitivoSemTentar = true;
+
+                    throw erroDefinitivo;
                 }
+
+                throw new Error(
+                    `Falha temporária da ponte (${respostaStatus.status}).`
+                );
+            }
+
+            statusFinal =
+                await respostaStatus.json();
+
+            falhasConsecutivas = 0;
+
+        } catch (erroConsulta) {
+            if (
+                erroConsulta?.erroDefinitivoSemTentar
+            ) {
+                throw erroConsulta;
+            }
+
+            falhasConsecutivas++;
+
+            if (
+                falhasConsecutivas >=
+                maximoFalhasConsecutivas
+            ) {
+                throw new Error(
+                    "A comunicação com a ponte ficou indisponível por mais de dois minutos. " +
+                    (erroConsulta.message || "")
+                );
+            }
+
+            atualizarTrabalho(
+                jobId,
+                Math.max(
+                    5,
+                    Number(statusFinal?.progresso) || 5
+                ),
+                `A conexão oscilou. Reconectando à ponte (${falhasConsecutivas}/${maximoFalhasConsecutivas})...`
             );
 
-        if (!respostaStatus.ok) {
-            throw new Error(
-                "Não foi possível consultar a geração local dos clipes."
-            );
+            continue;
         }
-
-        statusFinal =
-            await respostaStatus.json();
 
         const progresso =
             Math.max(
