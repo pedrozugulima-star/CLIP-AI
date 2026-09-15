@@ -114,6 +114,11 @@ const authPassword = document.getElementById("authPassword");
 const authSubmit = document.getElementById("authSubmit");
 const authMessage = document.getElementById("authMessage");
 const subscribeButton = document.getElementById("subscribeButton");
+const guestActions = document.getElementById("guestActions");
+const headerLoginButton = document.getElementById("headerLoginButton");
+const headerSignupButton = document.getElementById("headerSignupButton");
+const heroSignupButton = document.getElementById("heroSignupButton");
+const closeAuthButton = document.getElementById("closeAuthButton");
 
 
 // ======================================================
@@ -137,6 +142,25 @@ let formatoSaida = "vertical";
 let usageId = null;
 let supabase = null;
 let authMode = "login";
+let currentSession = null;
+
+function abrirAuth(modo = "login") {
+    definirModoAuth(modo);
+    authGate?.classList.remove("hidden");
+    document.body.classList.add("modal-open");
+    setTimeout(() => authEmail?.focus(), 50);
+}
+
+function fecharAuth() {
+    authGate?.classList.add("hidden");
+    document.body.classList.remove("modal-open");
+}
+
+function exigirLogin(modo = "signup") {
+    if (currentSession?.user) return true;
+    abrirAuth(modo);
+    return false;
+}
 
 async function apiFetch(url, options = {}) {
     if (!supabase) {
@@ -186,10 +210,12 @@ async function atualizarConta() {
 }
 
 async function aplicarSessao(session) {
+    currentSession = session || null;
     const conectado = Boolean(session?.user);
-    authGate?.classList.toggle("hidden", conectado);
-    appContent?.classList.toggle("auth-locked", !conectado);
     accountBox?.classList.toggle("hidden", !conectado);
+    guestActions?.classList.toggle("hidden", conectado);
+
+    if (conectado) fecharAuth();
 
     if (conectado) {
         try {
@@ -222,6 +248,22 @@ async function iniciarAutenticacao() {
 
 loginTab?.addEventListener("click", () => definirModoAuth("login"));
 signupTab?.addEventListener("click", () => definirModoAuth("signup"));
+headerLoginButton?.addEventListener("click", () => abrirAuth("login"));
+headerSignupButton?.addEventListener("click", () => abrirAuth("signup"));
+heroSignupButton?.addEventListener("click", () => {
+    if (currentSession?.user) {
+        document.getElementById("como-funciona")?.scrollIntoView({ behavior: "smooth" });
+    } else {
+        abrirAuth("signup");
+    }
+});
+closeAuthButton?.addEventListener("click", fecharAuth);
+authGate?.addEventListener("click", evento => {
+    if (evento.target === authGate) fecharAuth();
+});
+document.addEventListener("keydown", evento => {
+    if (evento.key === "Escape") fecharAuth();
+});
 
 authForm?.addEventListener("submit", async evento => {
     evento.preventDefault();
@@ -251,6 +293,10 @@ logoutButton?.addEventListener("click", async () => {
 });
 
 subscribeButton?.addEventListener("click", () => {
+    if (!currentSession?.user) {
+        abrirAuth("signup");
+        return;
+    }
     alert("A assinatura pelo Mercado Pago estará disponível em breve.");
 });
 
@@ -908,6 +954,10 @@ selectButton?.addEventListener(
     "click",
     () => {
 
+        if (!exigirLogin()) {
+            return;
+        }
+
         videoInput?.click();
 
     }
@@ -944,6 +994,10 @@ videoInput?.addEventListener(
 linkButton?.addEventListener(
     "click",
     async () => {
+
+        if (!exigirLogin()) {
+            return;
+        }
 
         const link =
             videoLink?.value.trim();
@@ -2002,6 +2056,10 @@ async function gerarClipesNoServidor() {
 generateButton?.addEventListener(
     "click",
     async () => {
+
+        if (!exigirLogin()) {
+            return;
+        }
 
         if (
             !selectedFile &&
