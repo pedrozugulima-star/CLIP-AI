@@ -2667,3 +2667,101 @@ body.plans-route .plans-back { display: inline-flex !important; }
   .auth-plans-side { border-top: 1px solid #293029 !important; border-left: 0 !important; }
   .auth-form-side h1 { font-size: 29px !important; }
 }
+
+
+/* CORREÇÃO: LOGIN CENTRALIZADO E PÁGINA DE PLANOS LIMPA */
+
+body.plans-route main.container > *:not(#precos) {
+  display: none !important;
+}
+
+body.plans-route #precos {
+  display: block !important;
+  width: 100% !important;
+  min-height: calc(100vh - 76px) !important;
+  margin: 0 !important;
+  padding: 58px 0 80px !important;
+}
+
+.auth-gate {
+  padding: 20px !important;
+  place-items: center !important;
+}
+
+.auth-card.auth-card-wide {
+  position: relative !important;
+  box-sizing: border-box !important;
+  width: min(620px, calc(100vw - 40px)) !important;
+  max-width: 620px !important;
+  max-height: calc(100vh - 40px) !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
+  display: block !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  border: 1px solid #2d342f !important;
+  border-radius: 22px !important;
+  background: #090c0a !important;
+}
+
+.auth-card-wide .auth-form-side,
+.auth-card-wide .auth-plans-side {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 34px !important;
+  display: block !important;
+  position: static !important;
+  transform: none !important;
+}
+
+.auth-card-wide .auth-plans-side {
+  border: 0 !important;
+  border-top: 1px solid #293029 !important;
+  background: linear-gradient(145deg, #101a12, #090c0a) !important;
+}
+
+.auth-card-wide #authForm,
+.auth-card-wide .auth-tabs {
+  width: 100% !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
+}
+
+.auth-card-wide #authForm input {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 52px !important;
+  margin: 0 !important;
+}
+
+.auth-card-wide .auth-submit {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.auth-card-wide .auth-plans-side h2 {
+  max-width: none !important;
+  font-size: 24px !important;
+}
+
+.auth-card-wide .auth-plan-option {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+@media (max-width: 600px) {
+  .auth-gate { padding: 8px !important; align-items: start !important; }
+  .auth-card.auth-card-wide {
+    width: calc(100vw - 16px) !important;
+    max-height: calc(100vh - 16px) !important;
+    margin: 0 !important;
+    border-radius: 16px !important;
+  }
+  .auth-card-wide .auth-form-side,
+  .auth-card-wide .auth-plans-side { padding: 27px 20px !important; }
+}
