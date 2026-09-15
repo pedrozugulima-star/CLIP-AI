@@ -1861,3 +1861,224 @@ video::-webkit-media-controls-fullscreen-button {
     }
 
 }
+/* ======================================================
+   CONTA, LOGIN E PLANO
+====================================================== */
+
+.auth-locked {
+    display: none !important;
+}
+
+.auth-gate {
+    min-height: calc(100vh - 80px);
+    display: grid;
+    place-items: center;
+    padding: 48px 20px;
+    background:
+        radial-gradient(circle at 50% 0%, rgba(48, 231, 103, .12), transparent 38%),
+        #080b09;
+}
+
+.auth-gate.hidden {
+    display: none;
+}
+
+.auth-card {
+    width: min(100%, 470px);
+    padding: 34px;
+    border: 1px solid rgba(48, 231, 103, .3);
+    border-radius: 24px;
+    background: #0d130f;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, .42);
+}
+
+.auth-brand {
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: .08em;
+}
+
+.auth-brand span,
+.auth-card h1 span {
+    color: #30e767;
+}
+
+.auth-card h1 {
+    margin: 18px 0 10px;
+    font-size: clamp(28px, 6vw, 40px);
+    line-height: 1.05;
+}
+
+.auth-card > p,
+.plan-preview p {
+    color: #9bab9f;
+    line-height: 1.55;
+}
+
+.auth-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin: 26px 0 20px;
+    padding: 5px;
+    border-radius: 12px;
+    background: #080b09;
+}
+
+.auth-tabs button,
+.account-box button {
+    border: 0;
+    cursor: pointer;
+    color: #9bab9f;
+    background: transparent;
+}
+
+.auth-tabs button {
+    padding: 11px;
+    border-radius: 9px;
+    font-weight: 800;
+}
+
+.auth-tabs button.active {
+    color: #071009;
+    background: #30e767;
+}
+
+#authForm {
+    display: grid;
+    gap: 9px;
+}
+
+#authForm label {
+    margin-top: 6px;
+    color: #c7d0c9;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+#authForm input {
+    width: 100%;
+    padding: 14px 15px;
+    border: 1px solid #263029;
+    border-radius: 11px;
+    outline: none;
+    color: #fff;
+    background: #080b09;
+}
+
+#authForm input:focus {
+    border-color: #30e767;
+    box-shadow: 0 0 0 3px rgba(48, 231, 103, .1);
+}
+
+.auth-submit {
+    margin-top: 12px;
+    padding: 14px;
+    border: 0;
+    border-radius: 11px;
+    cursor: pointer;
+    color: #071009;
+    background: #30e767;
+    font-weight: 900;
+}
+
+.auth-submit:disabled {
+    opacity: .65;
+}
+
+.auth-message {
+    min-height: 22px;
+    margin: 3px 0 0;
+    color: #ffd85a;
+    font-size: 13px;
+}
+
+.plan-preview {
+    margin-top: 20px;
+    padding: 18px;
+    border-radius: 14px;
+    background: rgba(48, 231, 103, .07);
+}
+
+.plan-preview > span {
+    display: block;
+    color: #30e767;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .12em;
+}
+
+.plan-preview strong {
+    display: block;
+    margin: 7px 0;
+    font-size: 25px;
+}
+
+.plan-preview small {
+    color: #9bab9f;
+    font-size: 13px;
+}
+
+.plan-preview p {
+    margin: 0;
+    font-size: 13px;
+}
+
+.account-box {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-left: auto;
+}
+
+.account-box.hidden {
+    display: none;
+}
+
+.account-box > div {
+    display: grid;
+    text-align: right;
+}
+
+.account-box strong {
+    font-size: 13px;
+}
+
+.account-box span {
+    color: #8fa096;
+    font-size: 11px;
+}
+
+.account-box button {
+    padding: 8px 12px;
+    border: 1px solid #263029;
+    border-radius: 9px;
+}
+
+.plan-area {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    margin: 30px 0;
+    padding: 28px;
+    border: 1px solid rgba(48, 231, 103, .24);
+    border-radius: 20px;
+    background: rgba(48, 231, 103, .045);
+}
+
+.plan-area h2 {
+    margin: 7px 0;
+}
+
+.plan-area p {
+    margin: 0;
+    color: #91a097;
+}
+
+@media (max-width: 700px) {
+    .auth-card { padding: 25px 20px; }
+    .topbar-status { display: none; }
+    .account-box span { display: none; }
+    .plan-area { align-items: stretch; flex-direction: column; }
+}

@@ -16,11 +16,6 @@
     >
 
     <title>Clip AI — Cortes inteligentes para vídeos</title>
-    <link
-    rel="icon"
-    type="image/png"
-    href="/favicon.png"
->
 
     <link
         rel="stylesheet"
@@ -68,9 +63,47 @@
 
             </div>
 
+            <div id="accountBox" class="account-box hidden">
+                <div>
+                    <strong id="accountPlan">Plano grátis</strong>
+                    <span id="accountUsage">1 teste disponível</span>
+                </div>
+                <button id="logoutButton" type="button">Sair</button>
+            </div>
+
         </div>
 
     </header>
+
+    <section id="authGate" class="auth-gate">
+        <div class="auth-card">
+            <div class="auth-brand">CLIP<span>AI</span></div>
+            <h1>Entre para criar seus clipes</h1>
+            <p>Crie sua conta e teste gratuitamente com um vídeo de até 20 minutos.</p>
+
+            <div class="auth-tabs">
+                <button id="loginTab" class="active" type="button">Entrar</button>
+                <button id="signupTab" type="button">Criar conta</button>
+            </div>
+
+            <form id="authForm">
+                <label for="authEmail">E-mail</label>
+                <input id="authEmail" type="email" autocomplete="email" required placeholder="seuemail@exemplo.com">
+
+                <label for="authPassword">Senha</label>
+                <input id="authPassword" type="password" autocomplete="current-password" minlength="6" required placeholder="Mínimo de 6 caracteres">
+
+                <button id="authSubmit" class="auth-submit" type="submit">Entrar</button>
+                <p id="authMessage" class="auth-message" aria-live="polite"></p>
+            </form>
+
+            <div class="plan-preview">
+                <span>PLANO MENSAL</span>
+                <strong>R$ 9,90 <small>/ mês</small></strong>
+                <p>200 minutos por mês • Cancele quando quiser</p>
+            </div>
+        </div>
+    </section>
 
 
 
@@ -78,7 +111,7 @@
          CONTEÚDO PRINCIPAL
     ========================================== -->
 
-    <main class="container">
+    <main id="appContent" class="container auth-locked">
 
 
         <!-- =====================================
@@ -757,6 +790,15 @@
         <!-- =====================================
              PROCESSAMENTO
         ====================================== -->
+
+        <section id="planArea" class="plan-area">
+            <div>
+                <span class="section-label">PLANO CLIP AI</span>
+                <h2>200 minutos todos os meses</h2>
+                <p>Um único plano por R$ 9,90/mês. Os minutos são renovados a cada ciclo e não acumulam.</p>
+            </div>
+            <button id="subscribeButton" type="button" class="secondary-button">Assinatura em breve</button>
+        </section>
 
         <section
             id="processingArea"

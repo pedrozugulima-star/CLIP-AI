@@ -1,3 +1,5 @@
+import { createClient } from "@supabase/supabase-js";
+
 // ======================================================
 // SERVIDOR
 // ======================================================
@@ -98,6 +100,21 @@ const resultsCount =
 const clipsGrid =
     document.getElementById("clipsGrid");
 
+const authGate = document.getElementById("authGate");
+const appContent = document.getElementById("appContent");
+const accountBox = document.getElementById("accountBox");
+const accountPlan = document.getElementById("accountPlan");
+const accountUsage = document.getElementById("accountUsage");
+const logoutButton = document.getElementById("logoutButton");
+const loginTab = document.getElementById("loginTab");
+const signupTab = document.getElementById("signupTab");
+const authForm = document.getElementById("authForm");
+const authEmail = document.getElementById("authEmail");
+const authPassword = document.getElementById("authPassword");
+const authSubmit = document.getElementById("authSubmit");
+const authMessage = document.getElementById("authMessage");
+const subscribeButton = document.getElementById("subscribeButton");
+
 
 // ======================================================
 // ESTADO
@@ -116,6 +133,128 @@ let segmentosIA = [];
 let monitorProgresso = null;
 
 let formatoSaida = "vertical";
+
+let usageId = null;
+let supabase = null;
+let authMode = "login";
+
+async function apiFetch(url, options = {}) {
+    if (!supabase) {
+        throw new Error("A autenticação ainda está carregando.");
+    }
+
+    const { data } = await supabase.auth.getSession();
+    const token = data?.session?.access_token;
+    if (!token) {
+        throw new Error("Entre na sua conta para continuar.");
+    }
+
+    const headers = new Headers(options.headers || {});
+    headers.set("Authorization", `Bearer ${token}`);
+
+    return fetch(url, { ...options, headers });
+}
+
+function definirModoAuth(modo) {
+    authMode = modo;
+    const cadastro = modo === "signup";
+    loginTab?.classList.toggle("active", !cadastro);
+    signupTab?.classList.toggle("active", cadastro);
+    if (authSubmit) authSubmit.textContent = cadastro ? "Criar conta grátis" : "Entrar";
+    if (authPassword) authPassword.autocomplete = cadastro ? "new-password" : "current-password";
+    if (authMessage) authMessage.textContent = "";
+}
+
+async function atualizarConta() {
+    const resposta = await apiFetch(`${API_BASE}/api/me`);
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || "Não foi possível consultar sua conta.");
+
+    if (accountPlan) accountPlan.textContent = dados.admin
+        ? "Administrador"
+        : `Plano ${dados.plano}`;
+
+    if (accountUsage) {
+        accountUsage.textContent = dados.admin
+            ? "Uso ilimitado"
+            : dados.assinaturaAtiva
+                ? `${dados.minutosDisponiveis} de 200 minutos disponíveis`
+                : dados.testeDisponivel
+                    ? "1 teste grátis disponível"
+                    : "Teste grátis utilizado";
+    }
+}
+
+async function aplicarSessao(session) {
+    const conectado = Boolean(session?.user);
+    authGate?.classList.toggle("hidden", conectado);
+    appContent?.classList.toggle("auth-locked", !conectado);
+    accountBox?.classList.toggle("hidden", !conectado);
+
+    if (conectado) {
+        try {
+            await atualizarConta();
+        } catch (erro) {
+            console.error(erro);
+        }
+    }
+}
+
+async function iniciarAutenticacao() {
+    try {
+        const resposta = await fetch(`${API_BASE}/api/config`);
+        const config = await resposta.json();
+        if (!config.supabaseUrl || !config.supabaseAnonKey) {
+            throw new Error("Configure o Supabase no Render para liberar os cadastros.");
+        }
+
+        supabase = createClient(config.supabaseUrl, config.supabaseAnonKey);
+        const { data } = await supabase.auth.getSession();
+        await aplicarSessao(data.session);
+
+        supabase.auth.onAuthStateChange((_evento, session) => {
+            setTimeout(() => aplicarSessao(session), 0);
+        });
+    } catch (erro) {
+        if (authMessage) authMessage.textContent = erro.message;
+    }
+}
+
+loginTab?.addEventListener("click", () => definirModoAuth("login"));
+signupTab?.addEventListener("click", () => definirModoAuth("signup"));
+
+authForm?.addEventListener("submit", async evento => {
+    evento.preventDefault();
+    authSubmit.disabled = true;
+    authMessage.textContent = "Aguarde...";
+
+    try {
+        const email = authEmail.value.trim();
+        const password = authPassword.value;
+        const resultado = authMode === "signup"
+            ? await supabase.auth.signUp({ email, password })
+            : await supabase.auth.signInWithPassword({ email, password });
+
+        if (resultado.error) throw resultado.error;
+        authMessage.textContent = authMode === "signup" && !resultado.data.session
+            ? "Conta criada. Confira seu e-mail para confirmar o cadastro."
+            : "Acesso liberado.";
+    } catch (erro) {
+        authMessage.textContent = erro.message || "Não foi possível entrar.";
+    } finally {
+        authSubmit.disabled = false;
+    }
+});
+
+logoutButton?.addEventListener("click", async () => {
+    await supabase?.auth.signOut();
+});
+
+subscribeButton?.addEventListener("click", () => {
+    alert("A assinatura pelo Mercado Pago estará disponível em breve.");
+});
+
+iniciarAutenticacao();
 
 
 function criarSeletorFormato() {
@@ -541,6 +680,8 @@ function prepararVideo(
     file
 ) {
 
+    usageId = crypto.randomUUID();
+
     selectedFile =
         file;
 
@@ -679,6 +820,7 @@ function prepararVideo(
 function prepararVideoRemoto(
     dados
 ) {
+    usageId = crypto.randomUUID();
     selectedFile =
         null;
 
@@ -849,7 +991,7 @@ linkButton?.addEventListener(
                 async () => {
                     try {
                         const respostaProgresso =
-                            await fetch(
+                            await apiFetch(
                                 `${API_BASE}/video-link/progresso/${downloadId}`
                             );
 
@@ -887,7 +1029,7 @@ linkButton?.addEventListener(
         try {
 
             const resposta =
-                await fetch(
+                await apiFetch(
                     `${API_BASE}/video-link`,
                     {
 
@@ -1462,10 +1604,15 @@ async function analisarComIA() {
         jobId
     );
 
+    formData.append(
+        "usageId",
+        usageId || crypto.randomUUID()
+    );
+
     try {
 
         const resposta =
-            await fetch(
+            await apiFetch(
                 `${API_BASE}/analisar-video`,
                 {
 
@@ -1538,6 +1685,8 @@ async function analisarComIA() {
             )
                 ? dados.segmentos
                 : [];
+
+        atualizarConta().catch(console.error);
 
 
         const novosCortes =
@@ -1771,7 +1920,7 @@ async function gerarClipesNoServidor() {
     try {
 
         const resposta =
-            await fetch(
+            await apiFetch(
                 `${API_BASE}/gerar-clipes`,
                 {
 

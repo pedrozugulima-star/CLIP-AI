@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import multer from "multer";
@@ -9,6 +10,7 @@ import { pipeline } from "stream/promises";
 import { fileURLToPath } from "url";
 import { randomUUID } from "crypto";
 import ffmpegStatic from "ffmpeg-static";
+import { createClient } from "@supabase/supabase-js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -30,6 +32,29 @@ const YOUTUBE_BRIDGE_SECRET =
     process.env.YOUTUBE_BRIDGE_SECRET ||
     "clip-ai-bridge-temporario";
 
+const SUPABASE_URL = String(process.env.SUPABASE_URL || "").trim();
+const SUPABASE_ANON_KEY = String(process.env.SUPABASE_ANON_KEY || "").trim();
+const SUPABASE_SERVICE_ROLE_KEY = String(
+    process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+).trim();
+
+const ADMIN_EMAILS = new Set(
+    String(process.env.ADMIN_EMAILS || "")
+        .split(",")
+        .map(email => email.trim().toLowerCase())
+        .filter(Boolean)
+);
+
+const supabaseAdmin =
+    SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+        ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false
+            }
+        })
+        : null;
+
 for (const pasta of [uploadsDir, geradosDir]) {
     if (!fs.existsSync(pasta)) {
         fs.mkdirSync(pasta, {
@@ -45,6 +70,162 @@ app.use(
         limit: "20mb"
     })
 );
+
+function exigirSupabaseConfigurado() {
+    if (!supabaseAdmin || !SUPABASE_ANON_KEY) {
+        const erro = new Error(
+            "A autenticação ainda não foi configurada no servidor."
+        );
+        erro.statusCode = 503;
+        throw erro;
+    }
+}
+
+async function autenticar(req, res, next) {
+    try {
+        exigirSupabaseConfigurado();
+
+        const cabecalho = String(req.headers.authorization || "");
+        const token = cabecalho.startsWith("Bearer ")
+            ? cabecalho.slice(7).trim()
+            : "";
+
+        if (!token) {
+            return res.status(401).json({
+                sucesso: false,
+                erro: "Entre na sua conta para continuar."
+            });
+        }
+
+        const { data, error } = await supabaseAdmin.auth.getUser(token);
+        if (error || !data?.user) {
+            return res.status(401).json({
+                sucesso: false,
+                erro: "Sua sessão expirou. Entre novamente."
+            });
+        }
+
+        const email = String(data.user.email || "").toLowerCase();
+        req.usuario = {
+            id: data.user.id,
+            email,
+            admin: ADMIN_EMAILS.has(email)
+        };
+
+        next();
+    } catch (erro) {
+        return res.status(erro.statusCode || 500).json({
+            sucesso: false,
+            erro: erro.message || "Não foi possível validar o acesso."
+        });
+    }
+}
+
+async function obterSituacaoUsuario(usuario) {
+    if (usuario.admin) {
+        return {
+            email: usuario.email,
+            plano: "Administrador",
+            admin: true,
+            assinaturaAtiva: true,
+            testeDisponivel: true,
+            minutosUsados: 0,
+            minutosDisponiveis: null
+        };
+    }
+
+    const { data, error } = await supabaseAdmin
+        .from("profiles")
+        .select("email, subscription_status, trial_used, monthly_minutes_used, period_start, period_end")
+        .eq("user_id", usuario.id)
+        .maybeSingle();
+
+    if (error) {
+        throw new Error(`Não foi possível consultar seu plano: ${error.message}`);
+    }
+
+    const perfil = data || {
+        email: usuario.email,
+        subscription_status: "free",
+        trial_used: false,
+        monthly_minutes_used: 0
+    };
+    const assinaturaAtiva = perfil.subscription_status === "active";
+    const usados = Number(perfil.monthly_minutes_used || 0);
+
+    return {
+        email: usuario.email,
+        plano: assinaturaAtiva ? "Mensal" : "Grátis",
+        admin: false,
+        assinaturaAtiva,
+        testeDisponivel: !perfil.trial_used,
+        minutosUsados: usados,
+        minutosDisponiveis: assinaturaAtiva
+            ? Math.max(0, Number((200 - usados).toFixed(2)))
+            : 0,
+        periodoInicio: perfil.period_start || null,
+        periodoFim: perfil.period_end || null
+    };
+}
+
+async function consumirUso(usuario, usageId, duracaoSegundos) {
+    if (usuario.admin) {
+        return { allowed: true, kind: "admin", remaining: null };
+    }
+
+    const chave = String(usageId || "").trim();
+    if (chave.length < 8 || chave.length > 160) {
+        const erro = new Error("Identificação do processamento inválida. Tente selecionar o vídeo novamente.");
+        erro.statusCode = 400;
+        throw erro;
+    }
+
+    const minutos = Number(duracaoSegundos) / 60;
+    const { data, error } = await supabaseAdmin.rpc("consume_clip_minutes", {
+        p_user_id: usuario.id,
+        p_source_key: chave,
+        p_minutes: minutos
+    });
+
+    if (error) {
+        throw new Error(`Não foi possível registrar o uso: ${error.message}`);
+    }
+
+    if (!data?.allowed) {
+        const erro = new Error(data?.message || "Seu plano não permite processar este vídeo.");
+        erro.statusCode = 402;
+        erro.reason = data?.reason || "plan_required";
+        throw erro;
+    }
+
+    return data;
+}
+
+app.get("/api/config", (req, res) => {
+    res.json({
+        supabaseUrl: SUPABASE_URL,
+        supabaseAnonKey: SUPABASE_ANON_KEY,
+        planPrice: 9.9,
+        monthlyMinutes: 200,
+        trialMinutes: 20,
+        paymentsEnabled: false
+    });
+});
+
+app.get("/api/me", autenticar, async (req, res) => {
+    try {
+        res.json({ sucesso: true, ...(await obterSituacaoUsuario(req.usuario)) });
+    } catch (erro) {
+        res.status(500).json({ sucesso: false, erro: erro.message });
+    }
+});
+
+app.post("/api/assinar", autenticar, (req, res) => {
+    res.status(503).json({
+        sucesso: false,
+        erro: "A assinatura pelo Mercado Pago estará disponível em breve."
+    });
+});
 
 app.use(
     "/generated",
@@ -1013,6 +1194,7 @@ app.get(
 
 app.get(
     "/video-link/progresso/:downloadId",
+    autenticar,
     (
         req,
         res
@@ -1035,6 +1217,7 @@ app.get(
 
 app.post(
     "/video-link",
+    autenticar,
     async (
         req,
         res
@@ -2027,6 +2210,7 @@ function escolherMelhoresCortes(
 app.post(
     "/analisar-video",
 
+    autenticar,
     upload.single("video"),
 
     async (
@@ -2161,6 +2345,12 @@ app.post(
                     0
                 );
 
+            const uso = await consumirUso(
+                req.usuario,
+                req.body?.usageId,
+                duracao
+            );
+
             atualizarTrabalho(
                 jobId,
                 75,
@@ -2208,7 +2398,9 @@ app.post(
 
                 segmentos,
 
-                cortes
+                cortes,
+
+                uso
             });
 
         } catch (erro) {
@@ -2235,13 +2427,14 @@ app.post(
             );
 
             return res
-                .status(500)
+                .status(erro.statusCode || 500)
                 .json({
                     sucesso: false,
 
                     erro:
                         erro.message ||
-                        "Erro ao analisar o vídeo."
+                        "Erro ao analisar o vídeo.",
+                    reason: erro.reason || null
                 });
 
         } finally {
@@ -3547,6 +3740,7 @@ async function gerarClipesNaPonte(
 app.post(
     "/gerar-clipes",
 
+    autenticar,
     upload.single("video"),
 
     async (
