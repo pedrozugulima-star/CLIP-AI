@@ -136,7 +136,7 @@ async function obterSituacaoUsuario(usuario) {
 
     const { data, error } = await supabaseAdmin
         .from("profiles")
-        .select("email, subscription_status, trial_used, monthly_minutes_used, period_start, period_end")
+        .select("email, subscription_status, plan_type, trial_used, monthly_minutes_used, period_start, period_end")
         .eq("user_id", usuario.id)
         .maybeSingle();
 
@@ -151,17 +151,21 @@ async function obterSituacaoUsuario(usuario) {
         monthly_minutes_used: 0
     };
     const assinaturaAtiva = perfil.subscription_status === "active";
+    const tipoPlano = perfil.plan_type === "pro" ? "pro" : "essential";
+    const limiteMensal = tipoPlano === "pro" ? 800 : 200;
     const usados = Number(perfil.monthly_minutes_used || 0);
 
     return {
         email: usuario.email,
-        plano: assinaturaAtiva ? "Mensal" : "Grátis",
+        plano: assinaturaAtiva ? (tipoPlano === "pro" ? "Pro" : "Essencial") : "Grátis",
+        tipoPlano: assinaturaAtiva ? tipoPlano : "free",
+        limiteMensal: assinaturaAtiva ? limiteMensal : 0,
         admin: false,
         assinaturaAtiva,
         testeDisponivel: !perfil.trial_used,
         minutosUsados: usados,
         minutosDisponiveis: assinaturaAtiva
-            ? Math.max(0, Number((200 - usados).toFixed(2)))
+            ? Math.max(0, Number((limiteMensal - usados).toFixed(2)))
             : 0,
         periodoInicio: perfil.period_start || null,
         periodoFim: perfil.period_end || null
@@ -206,7 +210,8 @@ app.get("/api/config", (req, res) => {
         supabaseUrl: SUPABASE_URL,
         supabaseAnonKey: SUPABASE_ANON_KEY,
         planPrice: 9.9,
-        monthlyMinutes: 200,
+        essentialMinutes: 200,
+        proMinutes: 800,
         trialMinutes: 20,
         paymentsEnabled: false
     });
