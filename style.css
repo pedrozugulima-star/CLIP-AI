@@ -2765,3 +2765,64 @@ body.plans-route #precos {
   .auth-card-wide .auth-form-side,
   .auth-card-wide .auth-plans-side { padding: 27px 20px !important; }
 }
+
+/* BOTÃO ENTRAR COM GOOGLE */
+.auth-google-button {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  min-height: 52px !important;
+  margin: 0 0 17px !important;
+  padding: 0 18px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 12px !important;
+  border: 1px solid #343b36 !important;
+  border-radius: 11px !important;
+  color: #f5f7f5 !important;
+  background: #111512 !important;
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  cursor: pointer !important;
+  transition: border-color .2s ease, background .2s ease !important;
+}
+
+.auth-google-button:hover {
+  border-color: #5a625c !important;
+  background: #171c18 !important;
+}
+
+.auth-google-button:disabled {
+  opacity: .65 !important;
+  cursor: wait !important;
+}
+
+.auth-google-button svg {
+  width: 21px !important;
+  height: 21px !important;
+  flex: 0 0 21px !important;
+}
+
+.auth-divider {
+  width: 100% !important;
+  margin: 0 0 17px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  color: #777f79 !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+  letter-spacing: .06em !important;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "" !important;
+  height: 1px !important;
+  flex: 1 !important;
+  background: #293029 !important;
+}
+
+.auth-divider span {
+  white-space: nowrap !important;
+}
