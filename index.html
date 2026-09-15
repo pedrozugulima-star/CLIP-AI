@@ -56,7 +56,7 @@
             <nav class="public-nav" aria-label="Navegação principal">
                 <a href="#caracteristicas">Características</a>
                 <a href="#como-funciona">Como funciona</a>
-                <a href="#precos">Preços</a>
+                <a href="/planos" data-route="plans">Planos</a>
             </nav>
 
             <div id="guestActions" class="guest-actions">
@@ -77,32 +77,50 @@
     </header>
 
     <section id="authGate" class="auth-gate hidden" role="dialog" aria-modal="true" aria-labelledby="authTitle">
-        <div class="auth-card">
+        <div class="auth-card auth-card-wide">
             <button id="closeAuthButton" class="close-auth" type="button" aria-label="Fechar">×</button>
-            <div class="auth-brand">CLIP<span>AI</span></div>
-            <h1 id="authTitle">Entre para criar seus clipes</h1>
-            <p>Crie sua conta e teste gratuitamente com um vídeo de até 20 minutos.</p>
+            <div class="auth-form-side">
+                <div class="auth-brand">CLIP<span>AI</span></div>
+                <h1 id="authTitle">Bem-vindo ao Clip AI</h1>
+                <p>Entre na sua conta ou comece gratuitamente.</p>
 
-            <div class="auth-tabs">
-                <button id="loginTab" class="active" type="button">Entrar</button>
-                <button id="signupTab" type="button">Criar conta</button>
+                <div class="auth-tabs">
+                    <button id="loginTab" class="active" type="button">Entrar</button>
+                    <button id="signupTab" type="button">Criar conta</button>
+                </div>
+
+                <form id="authForm">
+                    <label for="authEmail">E-mail</label>
+                    <input id="authEmail" type="email" autocomplete="email" required placeholder="seuemail@exemplo.com">
+
+                    <label for="authPassword">Senha</label>
+                    <input id="authPassword" type="password" autocomplete="current-password" minlength="6" required placeholder="Mínimo de 6 caracteres">
+
+                    <button id="authSubmit" class="auth-submit" type="submit">Entrar</button>
+                    <p id="authMessage" class="auth-message" aria-live="polite"></p>
+                </form>
             </div>
 
-            <form id="authForm">
-                <label for="authEmail">E-mail</label>
-                <input id="authEmail" type="email" autocomplete="email" required placeholder="seuemail@exemplo.com">
+            <div class="auth-plans-side">
+                <span class="auth-plans-label">ESCOLHA COMO COMEÇAR</span>
+                <h2>Planos simples para criar mais</h2>
 
-                <label for="authPassword">Senha</label>
-                <input id="authPassword" type="password" autocomplete="current-password" minlength="6" required placeholder="Mínimo de 6 caracteres">
+                <div class="auth-plan-list">
+                    <button type="button" class="auth-plan-option active" data-auth-plan="free">
+                        <span><strong>Grátis</strong><small>1 vídeo de até 20 minutos</small></span>
+                        <b>R$ 0</b>
+                    </button>
+                    <button type="button" class="auth-plan-option" data-auth-plan="essential">
+                        <span><strong>Essencial</strong><small>200 minutos por mês</small></span>
+                        <b>R$ 9,90<small>/mês</small></b>
+                    </button>
+                    <button type="button" class="auth-plan-option recommended" data-auth-plan="pro">
+                        <span><strong>Pro</strong><small>800 minutos por mês</small></span>
+                        <b>R$ 29,90<small>/mês</small></b>
+                    </button>
+                </div>
 
-                <button id="authSubmit" class="auth-submit" type="submit">Entrar</button>
-                <p id="authMessage" class="auth-message" aria-live="polite"></p>
-            </form>
-
-            <div class="plan-preview">
-                <span>PLANO MENSAL</span>
-                <strong>R$ 9,90 <small>/ mês</small></strong>
-                <p>200 minutos por mês • Cancele quando quiser</p>
+                <a class="auth-all-plans" href="/planos" data-route="plans">Ver todos os detalhes dos planos →</a>
             </div>
         </div>
     </section>
@@ -189,8 +207,8 @@
             </div>
 
             <div class="hero-actions">
-                <button id="heroSignupButton" class="hero-primary" type="button">Criar clipes grátis</button>
-                <a href="#como-funciona" class="hero-secondary">Ver como funciona</a>
+                <button id="heroSignupButton" class="hero-primary" type="button">Criar meu primeiro clipe</button>
+                <a href="/planos" data-route="plans" class="hero-secondary">Ver planos</a>
             </div>
 
         </section>
@@ -799,6 +817,7 @@
         ====================================== -->
 
         <section id="precos" class="pricing-section">
+            <a href="/" class="plans-back" data-route="home">← Voltar para o início</a>
             <div class="pricing-heading">
                 <span class="section-label">PLANOS CLIP AI</span>
                 <h2>Escolha o plano ideal para criar mais</h2>

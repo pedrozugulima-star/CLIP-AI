@@ -2620,3 +2620,109 @@ function criarCardClip(
     );
 
 }
+
+
+// ======================================================
+// NAVEGAÇÃO INTERNA: INÍCIO, PLANOS E ÁREA DE CRIAÇÃO
+// ======================================================
+
+const pricingSectionRoute = document.getElementById("precos");
+let abrirEditorDepoisDoLogin = false;
+
+function rotaAtualClipAI() {
+    return window.location.pathname.replace(/\/+$/, "") || "/";
+}
+
+function mostrarRotaClipAI(rolar = true) {
+    const planosAberto = rotaAtualClipAI() === "/planos";
+
+    document.body.classList.toggle("plans-route", planosAberto);
+
+    if (pricingSectionRoute) {
+        pricingSectionRoute.style.display = planosAberto ? "" : "none";
+    }
+
+    if (planosAberto) {
+        fecharAuth();
+        document.title = "Planos — Clip AI";
+        if (rolar) window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+        document.title = "Clip AI — Cortes inteligentes para vídeos";
+        if (rolar) window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+}
+
+function navegarClipAI(caminho) {
+    if (rotaAtualClipAI() !== caminho) {
+        window.history.pushState({}, "", caminho);
+    }
+    mostrarRotaClipAI(true);
+}
+
+document.querySelectorAll("[data-route]").forEach(link => {
+    link.addEventListener("click", evento => {
+        evento.preventDefault();
+        navegarClipAI(link.dataset.route === "plans" ? "/planos" : "/");
+    });
+});
+
+window.addEventListener("popstate", () => mostrarRotaClipAI(false));
+
+document.querySelectorAll(".auth-plan-option").forEach(option => {
+    option.addEventListener("click", () => {
+        document.querySelectorAll(".auth-plan-option").forEach(item => {
+            item.classList.toggle("active", item === option);
+        });
+
+        const plano = option.dataset.authPlan;
+
+        if (plano === "free") {
+            definirModoAuth("signup");
+            authEmail?.focus();
+            return;
+        }
+
+        if (authMessage) {
+            authMessage.textContent = plano === "pro"
+                ? "Plano Pro selecionado. O pagamento será liberado em breve."
+                : "Plano Essencial selecionado. O pagamento será liberado em breve.";
+        }
+    });
+});
+
+heroSignupButton?.addEventListener("click", () => {
+    if (currentSession?.user) {
+        document.getElementById("como-funciona")?.scrollIntoView({
+            behavior: "smooth",
+            block: "start"
+        });
+        return;
+    }
+
+    abrirEditorDepoisDoLogin = true;
+});
+
+const observadorDaConta = accountBox
+    ? new MutationObserver(() => {
+        const conectado = !accountBox.classList.contains("hidden");
+
+        if (conectado && abrirEditorDepoisDoLogin) {
+            abrirEditorDepoisDoLogin = false;
+            navegarClipAI("/");
+
+            setTimeout(() => {
+                document.getElementById("como-funciona")?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start"
+                });
+            }, 250);
+        }
+    })
+    : null;
+
+observadorDaConta?.observe(accountBox, {
+    attributes: true,
+    attributeFilter: ["class"]
+});
+
+mostrarRotaClipAI(false);
